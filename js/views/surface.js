@@ -112,11 +112,11 @@ export default {
     function topOf() {
       const { model, win, opts } = store.state;
       if (!level || level.model !== model || level.win !== win) {
-        // a typical value of |F| across the window: the median on a coarse grid
+        // a height that only the spikes exceed: a little above what 9 tenths of the window stays under
         const vals = [];
         for (let i = 0; i < 24; i++) for (let j = 0; j < 24; j++) vals.push(logMagAt({ re: win.cx + win.half * ((i + 0.5) / 12 - 1), im: win.cy + win.half * ((j + 0.5) / 12 - 1) }));
         vals.sort((a, b) => a - b);
-        level = { model, win, ref: vals[288] + Math.log(5) };
+        level = { model, win, ref: vals[518] + Math.log(2.2) };
       }
       return level.ref + (opts.clamp - 0.5) * 2 * Math.LN10;
     }
@@ -277,7 +277,7 @@ export default {
       stale = false;
       if (!R?.mesh || !size.w) return;
       // a narrow panel stands further back, so the whole plane stays in the picture
-      const target = new T.Vector3(0, 0.3, 0), d = cam.dist * Math.min(1.7, Math.max(0.8, (1.15 * size.h) / size.w));
+      const target = new T.Vector3(0, 0.3, 0), d = cam.dist * Math.min(2.2, Math.max(0.8, (1.42 * size.h) / size.w));
       R.camera.position.set(target.x + d * Math.sin(cam.pol) * Math.sin(cam.az), target.y + d * Math.cos(cam.pol), target.z + d * Math.sin(cam.pol) * Math.cos(cam.az));
       R.camera.lookAt(target);
       R.camera.updateMatrixWorld();
@@ -289,7 +289,15 @@ export default {
     // over the canvas where their points land.
     function placeLabels() {
       const { win, probe, model } = store.state, step = R.uniforms.uStep.value, want = [];
-      const add = (s, text, cls, dy) => { const y = heightAt(s); if (y > HEIGHT * 0.5) return; const p = screen(toWorld(s, y + 0.01)); if (p.front && p.x > 4 && p.x < size.w - 4 && p.y > 4 && p.y < size.h - 4) want.push({ ...p, y: p.y + dy, text, cls }); };
+      // an axis number is left out on a spike, off the canvas, or where it would sit on another
+      const add = (s, text, cls, dy) => {
+        const y = heightAt(s);
+        if (y > HEIGHT * 0.5) return;
+        const p = screen(toWorld(s, y + 0.01));
+        if (!p.front || p.x < 8 || p.x > size.w - 8 || p.y < 8 || p.y > size.h - 16) return;
+        if (want.some((o) => Math.abs(o.x - p.x) < 22 && Math.abs(o.y - p.y - dy) < 12)) return;
+        want.push({ ...p, y: p.y + dy, text, cls });
+      };
       const tidy = (v) => Number((Math.round(v / step) * step).toPrecision(10));
       const reAxis = Math.min(Math.max(0, win.cy - win.half), win.cy + win.half), imAxis = Math.min(Math.max(0, win.cx - win.half), win.cx + win.half);
       for (let v = Math.ceil((win.cx - win.half) / step) * step; v <= win.cx + win.half + 1e-9; v += step) { const t = tidy(v); if (t !== 0) add({ re: t, im: reAxis }, tickText(t), "tick", 12); }
@@ -327,7 +335,7 @@ export default {
     // Where a ray first meets the surface itself: march along it, then close in.
     function onSurface(x, y) {
       const { origin, dir } = ray(x, y), below = (k) => { const p = origin.clone().addScaledVector(dir, k); return Math.abs(p.x) <= 1 && Math.abs(p.z) <= 1 && p.y <= heightAt(toS(p)); };
-      const far = cam.dist * 1.7 + 3;
+      const far = cam.dist * 2.2 + 3;
       for (let k = 0, stepK = far / 400; k < far; k += stepK) {
         if (!below(k + stepK)) continue;
         let lo = k, hi = k + stepK;
