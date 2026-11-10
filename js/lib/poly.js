@@ -2,7 +2,6 @@
 import { C, add, mul, scale, abs } from "./complex.js";
 
 export const fromReal = (a) => a.map((x) => C(x, 0));
-export const degree = (p) => p.length - 1;
 const size = (p) => p.reduce((m, z) => Math.max(m, abs(z)), 0);
 
 /** Drops leading coefficients that are zero, or roundoff left by a sum that cancelled. */

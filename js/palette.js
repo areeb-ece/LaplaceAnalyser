@@ -13,8 +13,6 @@ const ROLES = {
   rule: "--rule", rule2: "--rule-2", sheet: "--sheet", card: "--card", bg: "--bg",
   accent: "--accent", tint: "--tint", well: "--well",
 };
-export const PLOT_ROLES = ["signal", "probe", "integrand", "integral", "value", "phUp", "phDown", "phReal"];
-export const ROLE_TOKENS = ROLES;
 
 let cache = null, probeEl = null;
 

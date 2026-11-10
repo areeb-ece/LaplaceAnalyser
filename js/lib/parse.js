@@ -197,11 +197,3 @@ export function hasY(n) {
   if (n.t === "bin") return hasY(n.a) || hasY(n.b);
   return false;
 }
-/** Does this tree mention the variable (t or s)? */
-export function hasVar(n, name) {
-  if (n.t === "var") return n.name === name;
-  if (n.t === "neg") return hasVar(n.a, name);
-  if (n.t === "call") return hasVar(n.arg, name);
-  if (n.t === "bin") return hasVar(n.a, name) || hasVar(n.b, name);
-  return false;
-}

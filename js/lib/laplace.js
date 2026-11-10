@@ -26,9 +26,6 @@ export function transformTerms(terms) {
   return { num: trim(num), lead: 1, poles };
 }
 
-/** The denominator, multiplied out (complex, ascending). */
-export const denominator = (F) => pscale(fromRoots(F.poles), C(F.lead, 0));
-
 /** F at a point s. */
 export function evalTransform(F, s) {
   let d = C(F.lead, 0);

@@ -2,7 +2,6 @@
 export const C = (re = 0, im = 0) => ({ re, im });
 export const ZERO = Object.freeze(C(0, 0));
 export const ONE = Object.freeze(C(1, 0));
-export const I = Object.freeze(C(0, 1));
 
 export const add = (a, b) => C(a.re + b.re, a.im + b.im);
 export const sub = (a, b) => C(a.re - b.re, a.im - b.im);

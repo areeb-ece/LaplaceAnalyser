@@ -263,7 +263,7 @@ try {
       for (const theme of ["light", "console", "synthwave"]) {
         await page.evaluate((t) => SiteDesign.set({ theme: t }), theme);
         assert.equal(await page.getAttribute("html", "data-theme"), theme);
-        await frame(page);
+        await page.waitForTimeout(350); // colours cross-fade
         await shot(page, "laptop-theme-" + theme);
       }
       await page.evaluate(() => SiteDesign.reset());
