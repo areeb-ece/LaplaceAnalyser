@@ -185,8 +185,8 @@ try {
     assert.match(await page.locator(".steps .math").last().getAttribute("data-tex"), /y\(t\) = \\tfrac\{1\}\{4\}\\,t\\,\\sin\(2t\)/);
     assert.equal(await page.locator(".minis .mini").count(), 2, "one small panel per pole");
     await page.fill("#inIc0", "1");
-    await page.waitForTimeout(350);
-    assert.match(await page.locator(".steps .math").last().getAttribute("data-tex"), /\\cos\(2t\)/, "a starting value changes the solution");
+    // typing is read after a short pause; wait for the solution to follow rather than for a fixed time
+    await page.waitForFunction(() => /\\cos\(2t\)/.test([...document.querySelectorAll(".steps .math")].at(-1)?.dataset.tex ?? ""), null, { timeout: 10000 });
     await shot(page, "laptop-ode");
     await typeExpr(page, "y'' + y^2 = 0");
     assert.match(await page.locator("#inError").innerText(), /non-linear/);
