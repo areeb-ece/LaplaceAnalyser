@@ -49,7 +49,7 @@ const first = restore();
 let model = analyse(first.input);
 if (!model.ok) { first.input = { ...EMPTY }; model = analyse(first.input); }
 const store = createStore({
-  input: first.input, model, error: null, probe: first.probe, opts: first.opts,
+  input: first.input, model, error: null, preset: null, probe: first.probe, opts: first.opts,
   time: { t: model.tWindow, tMax: model.tWindow, playing: false, speed: 1 },
   win: { ...model.sWindow },
 });
@@ -61,17 +61,22 @@ const actions = {
   setInput(part) {
     const next = { ...state.input, ...part }, m = analyse(next);
     store.set("input", next);
+    store.set("preset", null); // typed over: no longer the example as it was loaded
     store.set("error", m.ok ? null : m.message);
     if (!m.ok) return;
     store.set("model", m);
     store.set("time", { ...state.time, t: m.tWindow, tMax: m.tWindow, playing: false });
     store.set("win", { ...m.sWindow });
   },
+  /** Load a built-in example: its input, how much time to show, and where the probe goes. */
   loadPreset(id) {
     const p = PRESETS.find((x) => x.id === id);
     if (!p) return;
     actions.setInput(p.input);
-    store.set("probe", { re: p.probe[0], im: p.probe[1] });
+    store.set("preset", id);
+    if (p.tMax) store.set("time", { ...state.time, t: p.tMax, tMax: p.tMax });
+    // unless the example says where, half a unit into the region of convergence
+    store.set("probe", p.probe ? { re: p.probe[0], im: p.probe[1] } : { re: Math.round((state.model.roc + 0.5) * 2) / 2, im: 1 });
   },
 };
 

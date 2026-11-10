@@ -59,11 +59,15 @@ async function open(viewport, init) {
   return { page, context, clean };
 }
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name + ".png"), timeout: 120000 });
-const figures = (page, view) => page.locator(`.view[data-view="${view}"] .figures`).innerText();
-const complex = (text) => { const m = /(−?[\d.]+) ([+−]) ([\d.]+)i/.exec(text); return [Number(m[1].replace("−", "-")), (m[2] === "−" ? -1 : 1) * Number(m[3])]; };
+// The key under a plot, one line per item: its words, then the TeX of its maths.
+const figures = (page, view) => page.$eval(`.view[data-view="${view}"] .key`, (key) => [...key.children].map((k) => [...k.querySelectorAll(":scope > span")].map((sp) => (sp.classList.contains("m") ? (sp.hidden ? "" : (sp.dataset.tex || "").slice(1)) : sp.textContent)).join(" ").trim()).join("\n"));
+const PROBE_LABEL = '.view[data-view="surface"] .mlayer .ml[data-tex^="Is ="]';
+const texOf = (page, selector) => page.locator(selector).first().getAttribute("data-tex");
+const complex = (text) => { const m = /= (-?[\d.]+) ([+-]) ([\d.]+)i/.exec(text); return [Number(m[1]), (m[2] === "-" ? -1 : 1) * Number(m[3])]; };
 const openViews = (page) => page.$$eval(".dk-stack", (els) => els.map((e) => e.dataset.view));
 const setTime = (page, t) => page.evaluate((v) => { const r = document.getElementById("timeRange"); r.value = String(v); r.dispatchEvent(new Event("input")); }, t);
 const typeExpr = async (page, text) => { await page.fill("#inExpr", text); await page.press("#inExpr", "Enter"); await frame(page); };
+const typeExprIn = async (page, mode, text) => { if (await page.locator('[data-key="tab:input"]').count()) await page.click('[data-key="tab:input"]'); await page.click(`[data-mode="${mode}"]`); await typeExpr(page, text); };
 
 let failed = false;
 try {
@@ -88,7 +92,8 @@ try {
     assert.equal(await page.inputValue("#inExpr"), "cos(t)");
     assert.equal(await page.getAttribute("#btnPlay", "aria-pressed"), "false");
     assert.ok((await page.$$eval("#inExamples option", (o) => o.length)) - 1 >= 8, "at least 8 examples");
-    await page.waitForFunction(() => document.querySelector('.view[data-view="surface"] .labels .probe'), null, { timeout: 15000 });
+    assert.ok((await page.$$eval("#inExamples optgroup", (g) => g.length)) >= 8, "from several fields");
+    await page.waitForSelector(PROBE_LABEL, { timeout: 60000 });
     await frame(page);
     await shot(page, "laptop-overview");
     const png = await page.locator('.view[data-view="surface"] canvas').first().screenshot({ timeout: 120000 });
@@ -99,6 +104,11 @@ try {
     await page.waitForSelector('.steps .math .katex');
     assert.match(await page.locator(".steps .math").nth(1).getAttribute("data-tex"), /\\frac\{s\}\{s\^\{2\} \+ 1\}/);
     await page.click('[data-key="tab:input"]');
+
+    // Maths is typeset, not written out: the labels on the plots and the names in the page.
+    assert.ok((await page.locator('.view[data-view="time"] .mlayer .katex').count()) >= 2, "the time plot's labels are KaTeX");
+    assert.ok((await page.locator('.view[data-view="pz"] .mlayer .katex').count()) >= 1, "so is the probe's");
+    assert.ok((await page.locator("#timeOut .katex").count()) === 1 && (await page.locator(".strip .probe .katex").count()) === 3);
 
     // ── the probe ──
     await page.click('[data-layout="probe"]');
@@ -117,7 +127,7 @@ try {
     // dragging the probe on the pole-zero map: every view has the new s one frame later
     await setTime(page, 2.5);
     await frame(page);
-    const before = { integrand: await figures(page, "integrand"), integral: await figures(page, "integral"), label: await page.locator('.view[data-view="surface"] .labels .probe').innerText() };
+    const before = { integrand: await figures(page, "integrand"), integral: await figures(page, "integral"), label: await texOf(page, PROBE_LABEL) };
     const pz = await page.locator('.view[data-view="pz"] canvas').boundingBox();
     const spot = await page.evaluate(() => {
       // where the probe is drawn: the map shows a square of half-width 3 centred on 0 for cos(t)
@@ -128,7 +138,7 @@ try {
     await page.mouse.down();
     await page.mouse.move(pz.x + spot[0] + 40, pz.y + spot[1] + 25, { steps: 3 });
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
-    const mid = { integrand: await figures(page, "integrand"), integral: await figures(page, "integral"), label: await page.locator('.view[data-view="surface"] .labels .probe').innerText() };
+    const mid = { integrand: await figures(page, "integrand"), integral: await figures(page, "integral"), label: await texOf(page, PROBE_LABEL) };
     await page.mouse.up();
     for (const k of ["integrand", "integral", "label"]) assert.notEqual(mid[k], before[k], `${k} follows the probe`);
     assert.notEqual(await page.inputValue("#probeRe"), "0.5");
@@ -143,9 +153,10 @@ try {
     const sb = await surf.boundingBox();
     await page.mouse.click(sb.x + sb.width * 0.62, sb.y + sb.height * 0.66);
     await frame(page);
-    assert.notEqual(await page.locator('.view[data-view="surface"] .labels .probe').innerText(), mid.label, "a click on the surface places the probe");
+    assert.notEqual(await texOf(page, PROBE_LABEL), mid.label, "a click on the surface places the probe");
     // dragging the probe's foot in 3D moves it too
-    const foot = await page.evaluate(() => { const l = document.querySelector('.view[data-view="surface"] .labels .probe'), m = new DOMMatrix(getComputedStyle(l).transform); return [m.e - 12, m.f - 4]; });
+    // the label sits 14 px right of and 12 px below the probe's foot, centred on its own height
+    const foot = await page.evaluate((sel) => { const l = document.querySelector(sel), m = new DOMMatrix(getComputedStyle(l).transform); return [m.e - 14, m.f + l.offsetHeight / 2 - 12]; }, PROBE_LABEL);
     const placed = await page.inputValue("#probeRe");
     await page.mouse.move(sb.x + foot[0], sb.y + foot[1]);
     await page.mouse.down();
@@ -160,7 +171,7 @@ try {
     const off = await figures(page, "integral");
     assert.match(off, /Diverges/);
     assert.match(off, /analytic continuation/);
-    assert.match(off.split("\n")[1], /−?[\d.]+ [+−] [\d.]+i/);
+    assert.match(off.split("\n")[1], /= -?[\d.]+ [+-] [\d.]+i/);
     await shot(page, "laptop-diverges");
     await page.fill("#probeRe", "0");
     await frame(page);
@@ -169,17 +180,17 @@ try {
     // ── time ──
     await setTime(page, 3);
     await frame(page);
-    assert.match(await page.locator("#timeOut").innerText(), /t = 3\.00 s/);
+    assert.match(await texOf(page, "#timeOut"), /t = 3\.00/);
     await page.locator('.view[data-view="time"] canvas').focus();
     await page.keyboard.press("ArrowRight");
     await frame(page);
-    assert.match(await page.locator("#timeOut").innerText(), /t = 3\.10 s/);
+    assert.match(await texOf(page, "#timeOut"), /t = 3\.10/);
     await page.click("#btnPlay");
     await page.waitForTimeout(250);
     assert.equal(await page.getAttribute("#btnPlay", "aria-pressed"), "true");
     await page.click("#btnPlay");
     await frame(page);
-    assert.ok(Number((await page.locator("#timeOut").innerText()).match(/[\d.]+/)[0]) > 3.1, "time advanced while playing");
+    assert.ok(Number((await texOf(page, "#timeOut")).match(/[\d.]+/)[0]) > 3.1, "time advanced while playing");
 
     // ── input: equations, examples, refusals ──
     await page.click('[data-layout="ode"]');
@@ -190,7 +201,8 @@ try {
     assert.equal(await page.inputValue("#inExpr"), "y'' + 4y = cos(2t)");
     assert.equal(await page.locator(".steps li").count(), 5);
     assert.match(await page.locator(".steps .math").last().getAttribute("data-tex"), /y\(t\) = \\tfrac\{1\}\{4\}\\,t\\,\\sin\(2t\)/);
-    assert.equal(await page.locator(".minis .mini").count(), 2, "one small panel per pole");
+    assert.match(await figures(page, "decomp"), /Poles above the axis\nTheir conjugates\nTheir sum, y\(/, "the decomposition's key names each kind of pole");
+    assert.match(await page.locator(".form .about").innerText(), /Forced at resonance/, "the example says what it models");
     await page.fill("#inIc0", "1");
     // typing is read after a short pause; wait for the solution to follow rather than for a fixed time
     await page.waitForFunction(() => /\\cos\(2t\)/.test([...document.querySelectorAll(".steps .math")].at(-1)?.dataset.tex ?? ""), null, { timeout: 10000 });
@@ -256,6 +268,68 @@ try {
     await page.click("#btnReset");
     assert.deepEqual(await openViews(page), ["input", "surface", "time", "pz"], "reset");
 
+    // ── saving pictures ──
+    {
+      const read = async (download) => { const file = path.join(SHOTS, "saved-" + download.suggestedFilename()); await download.saveAs(file); return fs.readFileSync(file); };
+      const saveNow = async () => { const [d] = await Promise.all([page.waitForEvent("download", { timeout: 300000 }), page.click(".export .sd-primary")]); return { name: d.suggestedFilename(), bytes: await read(d) }; };
+      const tickBox = (text, on) => page.locator(`.export .sd-check:has-text("${text}") input`).setChecked(on);
+      const previewed = () => page.$eval(".ex-canvas", (c) => { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let ink = 0; for (let i = 3; i < d.length; i += 4 * 97) if (d[i]) ink++; return { w: c.width, h: c.height, ink, corner: d[3] }; });
+      const settle = () => page.waitForTimeout(500);
+      await page.click('[data-layout="probe"]');
+      await typeExprIn(page, "function", "e^(-0.5t) sin(3t)");
+      await page.click("#btnImage");
+      await page.waitForSelector(".export[open]");
+      await settle();
+      assert.equal(await page.locator(".export .ex-view input:checked").count(), 5, "it starts with the views that are open");
+      let pre = await previewed();
+      assert.ok(pre.ink > 100 && pre.corner === 255, "a preview is drawn, on the sheet");
+      assert.ok(Math.abs(pre.w / pre.h - 16 / 9) < 0.02, "16 : 9 to begin with");
+      // a still, as it comes
+      let got = await saveNow();
+      assert.equal(got.name, "laplace-analyser-e-0-5t-sin-3t.png");
+      assert.deepEqual([got.bytes.readUInt32BE(16), got.bytes.readUInt32BE(20)], [1920, 1080], "PNG size");
+      assert.match(await page.locator(".ex-status").innerText(), /Saved .*\.png · 1,920 × 1,080 px/);
+      // another shape, the light sheet, see-through, without the probe or the cursor
+      await page.selectOption('.export select[aria-label="Shape"]', "1:1");
+      await page.fill('.export input[aria-label="Width in pixels"]', "1000");
+      await page.locator('.export input[aria-label="Width in pixels"]').dispatchEvent("change");
+      await page.click('.export [data-v="light"]');
+      await tickBox("See-through", true); await tickBox("Probe point", false); await tickBox("Time cursor", false); await tickBox("Worked steps", true);
+      await page.click('.ex-view:has-text("S-plane surface") [data-v="l"]');
+      await settle();
+      pre = await previewed();
+      assert.ok(pre.corner === 0 && pre.ink > 50, "a see-through preview");
+      assert.ok(Math.abs(pre.w - pre.h) <= 2, "square");
+      got = await saveNow();
+      assert.deepEqual([got.bytes.readUInt32BE(16), got.bytes.readUInt32BE(20), got.bytes[25]], [1000, 1000, 6], "a square PNG with an alpha channel");
+      await shot(page, "laptop-save-dialog");
+      // time playing: a GIF, then a video where the browser can record one
+      await page.click('.export [data-v="dark"]');
+      await tickBox("See-through", false); await tickBox("S-plane surface", false); await tickBox("Worked steps", false);
+      await page.click('.export [data-v="gif"]');
+      await page.fill('.export input[aria-label="Width in pixels"]', "480");
+      await page.locator('.export input[aria-label="Width in pixels"]').dispatchEvent("change");
+      await page.selectOption('.export select[aria-label="Length"]', "4");
+      await page.selectOption('.export select[aria-label="Smoothness"]', "10");
+      assert.match(await page.locator(".ex-side .sd-hint").innerText(), /480 × 480 px, 40 frames/);
+      got = await saveNow();
+      assert.equal(got.bytes.subarray(0, 6).toString("latin1"), "GIF89a");
+      assert.deepEqual([got.bytes.readUInt16LE(6), got.bytes.readUInt16LE(8)], [480, 480], "GIF size");
+      let frames = 0;
+      for (let i = 0; i < got.bytes.length - 8; i++) if (got.bytes[i] === 0x21 && got.bytes[i + 1] === 0xf9 && got.bytes[i + 2] === 4 && got.bytes[i + 7] === 0) frames++;
+      assert.ok(frames >= 40, `the GIF has its 40 frames (${frames} found)`);
+      if (await page.locator('.export [data-v="video"]').isEnabled()) {
+        await page.click('.export [data-v="video"]');
+        got = await saveNow();
+        assert.match(got.name, /\.(mp4|webm)$/);
+        assert.ok(got.bytes.length > 20000, `a video of ${got.bytes.length} bytes`);
+      }
+      await page.click('.export header button[aria-label="Close"]');
+      await page.waitForSelector(".export", { state: "hidden" });
+      // the choices are remembered
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("laplaceanalyser.image")).ratio), "1:1");
+    }
+
     // ── keyboard and focus ──
     await page.focus("#btnPlay");
     await page.keyboard.press("Tab");
@@ -283,11 +357,13 @@ try {
   // ── every example opens without complaint ──
   {
     const { page, clean } = await open({ width: 1440, height: 900 });
-    for (const id of await page.$$eval("#inExamples option", (o) => o.map((x) => x.value).filter(Boolean))) {
+    const ids = await page.$$eval("#inExamples option", (o) => o.map((x) => x.value).filter(Boolean));
+    assert.ok(ids.length >= 50, `${ids.length} examples`);
+    for (const id of ids) {
       await page.selectOption("#inExamples", id);
       await frame(page);
       assert.ok(await page.isHidden("#inError"), id);
-      await shot(page, "example-" + id);
+      if (["car", "coupled", "aircraft", "string", "erlang"].includes(id)) await shot(page, "example-" + id);
     }
     await clean("examples");
     await page.context().close();
@@ -334,9 +410,9 @@ try {
     await page.goto(base);
     await page.waitForSelector(".dk-stack");
     await frame(page);
-    const t0 = await page.locator("#timeOut").innerText();
+    const t0 = await texOf(page, "#timeOut");
     await page.waitForTimeout(400);
-    assert.equal(await page.locator("#timeOut").innerText(), t0);
+    assert.equal(await texOf(page, "#timeOut"), t0);
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--dur-2").trim()), "0ms");
     await context.close();
   }

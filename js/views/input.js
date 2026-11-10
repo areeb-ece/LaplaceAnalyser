@@ -40,11 +40,14 @@ export default {
     const examples = h("select", { id: "inExamples" }, h("option", { value: "", text: "Load an example…" }),
       [...new Set(PRESETS.map((p) => p.group))].map((g) => h("optgroup", { label: g }, PRESETS.filter((p) => p.group === g).map((p) => h("option", { value: p.id, text: p.name })))));
     examples.addEventListener("change", () => { if (examples.value) actions.loadPreset(examples.value); examples.value = ""; });
+    // what the loaded example models; words with maths between $ signs
+    const about = h("p", { class: "sd-hint about", hidden: true });
+    const told = (text) => text.split("$").map((part, i) => (i % 2 ? m(part) : part));
     el.append(h("form", { class: "form", novalidate: true, on: { submit: (e) => e.preventDefault() } },
       seg,
       h("div", { class: "sd-field" }, label, expr, hint),
       error, ics, readas,
-      h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inExamples", text: "Examples" }), h("span", { class: "sd-select sd-small" }, examples))));
+      h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inExamples", text: "Examples" }), h("span", { class: "sd-select sd-small" }, examples), about)));
 
     let order = 2, timer = 0;
     const mode = () => MODES.find((x) => x.id === store.state.input.mode);
@@ -81,9 +84,12 @@ export default {
       if (input.mode === "ode") drawIcs(input);
       error.hidden = !message;
       error.textContent = message || "";
+      const preset = PRESETS.find((p) => p.id === store.state.preset);
+      about.hidden = !preset;
+      if (preset && about.dataset.id !== preset.id) { about.dataset.id = preset.id; about.replaceChildren(h("b", { text: preset.name + ". " }), ...told(preset.note)); }
       readas.hidden = !!message || !model?.typed;
       if (!message && model?.typed) tex(math, model.typed, true);
     }
-    return { update(state, dirty) { if (dirty.has("input") || dirty.has("model") || dirty.has("error")) draw(); } };
+    return { update(state, dirty) { if (dirty.has("input") || dirty.has("model") || dirty.has("error") || dirty.has("preset")) draw(); } };
   },
 };
