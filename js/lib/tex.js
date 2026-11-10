@@ -215,12 +215,6 @@ export function fmt(x, sig = 3) {
   const s = a >= 1e5 || a < 1e-3 ? x.toExponential(sig - 1).replace("e", "×10^").replace("+", "") : String(Number(x.toPrecision(sig)));
   return s.replace("-", "−");
 }
-/** A complex number with fixed decimals, like the probe label: 0.06 + 0.78i. */
-export function fmtComplex(z, places = 2) {
-  const r = z.re.toFixed(places).replace("-", "−"), i = Math.abs(z.im).toFixed(places);
-  return `${/^−?0\.?0*$/.test(r) ? r.replace("−", "") : r} ${z.im < 0 ? "−" : "+"} ${i}i`;
-}
-
 // ── numbers as TeX, for labels that change as something is dragged ──
 /** A number to a few significant figures. */
 export function texNum(x, sig = 3) {
