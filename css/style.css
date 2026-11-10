@@ -141,10 +141,10 @@ code { font-family: var(--font-mono); }
 .key svg { width: 16px; height: 16px; flex: none; }
 .key .roc svg { color: var(--accent); }
 .key .sw { width: 14px; height: 0; border-top: 3px solid var(--kc, var(--ink)); border-radius: 2px; }
-/* a line of figures set over a plot's corner */
-.readout { position: absolute; left: var(--sp-3); top: var(--sp-2); display: grid; gap: 2px; pointer-events: none; font: var(--fs-1)/1.4 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
-.readout b { font-weight: 400; color: var(--kc, var(--ink)); }
-.readout .sd-tag { justify-self: start; margin-top: var(--sp-1); font-family: var(--font-text); pointer-events: auto; }
+/* figures under a plot: each value in the colour of what it measures */
+.figures { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.figures b, .key .fig { font: 400 var(--fs-1) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--kc, var(--ink)); }
+.figures .status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); font-family: var(--font-text); }
 .corner { position: absolute; right: var(--sp-2); top: var(--sp-2); display: flex; gap: 2px; }
 
 /* text set over the 3D view: axis numbers and the probe's labels */
@@ -191,7 +191,7 @@ code { font-family: var(--font-mono); }
 
 /* ── narrow screens: one column, every open view under the last ── */
 .dock[data-mode="stacked"] { position: static; display: grid; gap: var(--gap); align-content: start; padding: 0 var(--gap) var(--sp-6); }
-.dock[data-mode="stacked"] .dk-body { height: min(70vh, 26rem); }
+.dock[data-mode="stacked"] .dk-body { flex: none; height: min(70vh, 26rem); }
 .dock[data-mode="stacked"] .dk-stack:is([data-view="input"], [data-view="steps"]) .dk-body { height: auto; }
 .dock[data-mode="stacked"] .dk-stack:is([data-view="input"], [data-view="steps"]) .view { position: static; }
 @media (max-width: 899px) {

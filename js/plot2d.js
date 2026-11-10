@@ -53,7 +53,7 @@ export function fitWindow(points, margin = 1.18, least = 1e-9) {
 
 /** Grid, axes and tick labels of a complex plane. Imaginary ticks read i, 2i, −i. */
 export function drawPlane(ctx, f, pal, { labels = true } = {}) {
-  const step = niceStep((2 * f.win.half * Math.max(f.w, f.h)) / Math.min(f.w, f.h), Math.max(f.w, f.h) / 56);
+  const step = niceStep(Math.max(f.w, f.h) / f.k, Math.max(f.w, f.h) / 72);
   const reLo = f.re(0), reHi = f.re(f.w), imLo = f.im(f.h), imHi = f.im(0);
   ctx.lineWidth = 1;
   ctx.strokeStyle = pal.rule2;
