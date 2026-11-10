@@ -12,7 +12,7 @@ import { fromReal, toReal } from "./poly.js";
 import { distinctRoots } from "./roots.js";
 import { InputError, parse, parseEquation } from "./parse.js";
 import { signalFromAst, numberFromAst, makeReal, evalEP, imagShare } from "./expoly.js";
-import { rationalFromAst } from "./rational.js";
+import { rationalFromAst, numerator } from "./rational.js";
 import { transformTerms, cancelCommon, partialFractions, inverseTerms, residuesOf, evalTransform, evalFractions, pairUp, samePole } from "./laplace.js";
 import { odeFromAst, solveOde } from "./ode.js";
 import * as T from "./tex.js";
@@ -41,18 +41,22 @@ function fromFunction(input) {
   const terms = makeReal(signalFromAst(ast));
   if (!terms.length) throw new InputError("That's the zero function, so there's nothing to transform. Try e^(-t) or cos(2t).");
   const F = transformTerms(terms);
-  const steps = (m) => [
-    { title: "The function", tex: `f(t) = ${T.timeTex(m.terms)},\\quad t \\ge 0` },
-    { title: "Transform term by term", tex: `F(s) = ${T.fractionsTex(m.poles)}` },
-    { title: "As one fraction", tex: `F(s) = ${T.fractionTex(m.num, m.lead, m.poles)}` },
-  ];
+  // One term (or one conjugate pair) is already a single fraction: no third step then.
+  const steps = (m) => {
+    const each = T.fractionsTex(m.poles), whole = T.fractionTex(m.num, m.lead, m.poles);
+    return [
+      { title: "The function", tex: `f(t) = ${T.timeTex(m.terms)},\\quad t \\ge 0` },
+      { title: each === whole ? "Its transform" : "Transform term by term", tex: `F(s) = ${each}` },
+      ...(each === whole ? [] : [{ title: "As one fraction", tex: `F(s) = ${whole}` }]),
+    ];
+  };
   return { kind: "function", sig: "f", cap: "F", F, terms, steps, typed: T.astTex(ast) };
 }
 
 function fromRational(input) {
   const ast = parse(input.rational ?? "");
   const r = rationalFromAst(ast);
-  if (r.num.length === 1 && r.num[0] === 0) throw new InputError("That's zero, so there's nothing to invert. Try 1/(s^2 + 4).");
+  if (r.k === 0) throw new InputError("That's zero, so there's nothing to invert. Try 1/(s^2 + 4).");
   let poles = [];
   for (const f of r.den) {
     for (const root of distinctRoots(fromReal(f.poly), true)) {
@@ -61,7 +65,7 @@ function fromRational(input) {
     }
   }
   poles = pairUp(poles);
-  const { F, cancelled } = cancelCommon({ num: fromReal(r.num), lead: 1, poles });
+  const { F, cancelled } = cancelCommon({ num: fromReal(numerator(r)), lead: 1, poles });
   const degN = F.num.length - 1, degD = F.poles.reduce((n, p) => n + p.mult, 0);
   if (degN >= degD) {
     throw new InputError(degD === 0
@@ -120,7 +124,9 @@ function finish(m) {
     num, numC: F.num, lead: F.lead, poles: pairUp(poles), zeros, cancelled: m.cancelled ?? [], roc, terms,
     tWindow: timeWindow(poles), sWindow: planeWindow(poles, zeros),
   };
-  model.steps = m.steps(model);
+  // A step that only repeats the one before it (a single term is its own partial fraction) is left out.
+  const rhs = (x) => x.tex.slice(x.tex.indexOf("=") + 1);
+  model.steps = m.steps(model).filter((x, i, all) => i === 0 || rhs(x) !== rhs(all[i - 1]));
   return model;
 }
 

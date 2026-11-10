@@ -14,9 +14,18 @@ export function polyRoots(input) {
   return roots.concat(aberth(p));
 }
 
-// The form that doesn't lose digits when b² is much bigger than 4ac. Real coefficients
-// with a negative discriminant come out as an exact conjugate pair.
+// Real coefficients take the textbook route, so a negative discriminant gives an exact
+// conjugate pair. Otherwise the form that doesn't lose digits when b² is much bigger than 4ac.
 function quadratic(c, b, a) {
+  if (a.im === 0 && b.im === 0 && c.im === 0) {
+    const disc = b.re * b.re - 4 * a.re * c.re;
+    if (disc < 0) {
+      const re = -b.re / (2 * a.re), im = Math.sqrt(-disc) / (2 * Math.abs(a.re));
+      return [C(re, im), C(re, -im)];
+    }
+    const q = -0.5 * (b.re + (b.re >= 0 ? 1 : -1) * Math.sqrt(disc));
+    return q === 0 ? [C(), C()] : [C(q / a.re, 0), C(c.re / q, 0)];
+  }
   const root = sqrt(sub(mul(b, b), scale(mul(a, c), 4)));
   const same = b.re * root.re + b.im * root.im >= 0;
   const q = scale(add(b, same ? root : scale(root, -1)), -0.5);
@@ -121,7 +130,7 @@ export function distinctRoots(p, real = true) {
   };
   split(all, 0.05 * scaleOf).forEach((g) => visit(g, 0.05 * scaleOf));
   if (real) snapReal(out, scaleOf);
-  return out.sort((a, b) => a.s.re - b.s.re || Math.abs(a.s.im) - Math.abs(b.s.im) || b.s.im - a.s.im);
+  return out.sort((a, b) => b.s.re - a.s.re || Math.abs(a.s.im) - Math.abs(b.s.im) || b.s.im - a.s.im);
 }
 
 function snapReal(roots, scaleOf) {

@@ -131,7 +131,8 @@ export function fractionsTex(poles) {
         return;
       }
       // repeated complex poles: left as the conjugate pair they are
-      const one = (a, s) => `\\frac{${cplx(a)}}{\\left(s - (${cplx(s)})\\right)^{${j + 1}}}`;
+      const away = (s) => (s.re === 0 ? `s ${s.im < 0 ? "+" : "-"} ${cplx({ re: 0, im: Math.abs(s.im) })}` : `s - (${cplx(s)})`);
+      const one = (a, s) => `\\frac{${cplx(a)}}{(${away(s)})^{${j + 1}}}`;
       pieces.push({ neg: false, tex: `${one(A, p.s)} + ${one(conj(A), conj(p.s))}` });
     });
   }
@@ -195,9 +196,11 @@ export function astTex(n) {
         const simple = a.t === "num" || a.t === "var" || a.t === "y";
         return `${simple ? astTex(a) : `\\left(${astTex(a)}\\right)`}^{${astTex(b)}}`;
       }
+      if (a.t === "neg" && !a.paren) return "-" + astTex({ t: "bin", op: "*", a: a.a, b });
       const left = wrap(a, isSum(a) || a.t === "neg"), right = wrap(b, isSum(b) || b.t === "neg");
       const digits = /^[\d.]/.test(right) || (b.t === "bin" && b.op === "^" && b.a.t === "num");
-      return left + (digits ? " \\cdot " : "\\,") + right;
+      const tight = a.t === "num" && !digits && (b.t === "var" || b.t === "y" || b.t === "call" || (b.t === "bin" && b.op === "^"));
+      return left + (digits ? " \\cdot " : tight ? "" : "\\,") + right;
     }
   }
   return "";

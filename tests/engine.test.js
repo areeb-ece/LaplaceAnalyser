@@ -164,7 +164,7 @@ test("every preset works and has real poles or conjugate pairs", () => {
   assert.ok(PRESETS.length >= 8);
   for (const p of PRESETS) {
     const m = good(p.input);
-    assert.ok(m.steps.length >= 3 && m.steps.every((s) => s.tex && !/NaN|undefined/.test(s.tex)), p.id);
+    assert.ok(m.steps.length >= 2 && m.steps.every((s) => s.tex && !/NaN|undefined/.test(s.tex)), p.id);
     for (const pole of m.poles) if (pole.s.im !== 0) assert.ok(m.poles.some((o) => o.s.re === pole.s.re && o.s.im === -pole.s.im), p.id);
   }
 });

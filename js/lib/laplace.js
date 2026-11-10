@@ -113,7 +113,7 @@ export function pairUp(poles) {
     const twin = poles.find((o) => o.s.im < 0 && samePole(o.s, conj(p.s)));
     if (twin) twin.s = conj(p.s);
   }
-  return poles.sort((a, b) => a.s.re - b.s.re || Math.abs(a.s.im) - Math.abs(b.s.im) || b.s.im - a.s.im);
+  return poles.sort((a, b) => b.s.re - a.s.re || Math.abs(a.s.im) - Math.abs(b.s.im) || b.s.im - a.s.im);
 }
 
 export { samePole };
