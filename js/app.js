@@ -22,7 +22,7 @@ const STATE_KEY = "laplaceanalyser.state", LAYOUT_KEY = "laplaceanalyser.layout"
 const LAYOUTS = {
   overview: () => row([0.25, 0.45, 0.3], stack("input", "steps"), stack("surface"), col([0.5, 0.5], stack("time"), stack("pz"))),
   probe: () => row([0.42, 0.29, 0.29], stack("surface"), col([0.5, 0.5], stack("integrand"), stack("integral")), col([0.5, 0.5], stack("pz"), stack("time", "input"))),
-  ode: () => row([0.32, 0.34, 0.34], col([0.42, 0.58], stack("input"), stack("steps")), col([0.5, 0.5], stack("time"), stack("pz")), stack("decomp")),
+  ode: () => row([0.32, 0.34, 0.34], col([0.54, 0.46], stack("input"), stack("steps")), col([0.5, 0.5], stack("time"), stack("pz")), stack("decomp")),
 };
 
 // ── state: the last input if there is one that still works, otherwise the first example ──

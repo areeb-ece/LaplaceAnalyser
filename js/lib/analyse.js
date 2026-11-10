@@ -98,7 +98,7 @@ function fromOde(input) {
   const { F, cancelled } = cancelCommon(sol.Y);
   const rhs = forcing.length ? T.fractionTex(toReal(sol.G.num), 1, sol.G.poles) : "0";
   const steps = (m) => [
-    { title: "The equation", tex: `${T.odeTex(coefs, forcing)}${order ? `,\\qquad ${T.icsTex(ics)}` : ""}` },
+    { title: "The equation and its starting values", tex: `\\begin{aligned}&${T.odeTex(coefs, forcing)}\\\\&${T.icsTex(ics)}\\end{aligned}` },
     { title: "Transform both sides", tex: T.transformedTex(coefs, ics, rhs) },
     { title: "Solve for Y(s)", tex: `Y(s) = ${T.fractionTex(m.num, m.lead, m.poles)}` },
     { title: "Partial fractions", tex: `Y(s) = ${T.fractionsTex(m.poles)}` },

@@ -42,7 +42,7 @@ export default {
     el.append(h("form", { class: "form", novalidate: true, on: { submit: (e) => e.preventDefault() } },
       seg,
       h("div", { class: "sd-field" }, label, expr, hint),
-      ics, error, readas,
+      error, ics, readas,
       h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inExamples", text: "Examples" }), h("span", { class: "sd-select sd-small" }, examples))));
 
     let order = 2, timer = 0;
