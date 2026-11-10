@@ -96,7 +96,7 @@ try {
     await page.waitForSelector(PROBE_LABEL, { timeout: 60000 });
     await frame(page);
     await shot(page, "laptop-overview");
-    const png = await page.locator('.view[data-view="surface"] canvas').first().screenshot({ timeout: 120000 });
+    const png = await page.locator('.view[data-view="surface"] .plot > canvas').first().screenshot({ timeout: 120000 });
     assert.ok(png.length > 20000, `the surface is drawn (${png.length} bytes of picture)`);
 
     // The transform of cos(t) is s/(s² + 1): poles at ±i.
@@ -128,10 +128,10 @@ try {
     await setTime(page, 2.5);
     await frame(page);
     const before = { integrand: await figures(page, "integrand"), integral: await figures(page, "integral"), label: await texOf(page, PROBE_LABEL) };
-    const pz = await page.locator('.view[data-view="pz"] canvas').boundingBox();
+    const pz = await page.locator('.view[data-view="pz"] .plot > canvas').boundingBox();
     const spot = await page.evaluate(() => {
       // where the probe is drawn: the map shows a square of half-width 3 centred on 0 for cos(t)
-      const c = document.querySelector('.view[data-view="pz"] canvas'), k = Math.min(c.clientWidth, c.clientHeight) / 6;
+      const c = document.querySelector('.view[data-view="pz"] .plot > canvas'), k = Math.min(c.clientWidth, c.clientHeight) / 6;
       return [c.clientWidth / 2 + 0.5 * k, c.clientHeight / 2 - 1 * k];
     });
     await page.mouse.move(pz.x + spot[0], pz.y + spot[1]);
@@ -144,7 +144,7 @@ try {
     assert.notEqual(await page.inputValue("#probeRe"), "0.5");
 
     // in the 3D view: arrow keys move it, and a click on the surface puts it there
-    const surf = page.locator('.view[data-view="surface"] canvas').first();
+    const surf = page.locator('.view[data-view="surface"] .plot > canvas').first();
     await surf.focus();
     const reBefore = Number(await page.inputValue("#probeRe"));
     await page.keyboard.press("ArrowRight");
@@ -181,7 +181,7 @@ try {
     await setTime(page, 3);
     await frame(page);
     assert.match(await texOf(page, "#timeOut"), /t = 3\.00/);
-    await page.locator('.view[data-view="time"] canvas').focus();
+    await page.locator('.view[data-view="time"] .plot > canvas').focus();
     await page.keyboard.press("ArrowRight");
     await frame(page);
     assert.match(await texOf(page, "#timeOut"), /t = 3\.10/);
