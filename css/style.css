@@ -79,7 +79,7 @@ code { font-family: var(--font-mono); }
 .strip .play { min-width: 5.5rem; }
 .strip output { flex: none; min-width: 7.5rem; font: var(--fs-2) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .strip .probe { flex: none; display: inline-flex; align-items: center; gap: var(--sp-2); margin-left: var(--sp-3); font: var(--fs-2) var(--font-mono); color: var(--ink-2); }
-.strip .probe .sd-input { width: 5.25rem; }
+.strip .probe .sd-input { width: 6rem; }
 
 .stage { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; isolation: isolate; }
 .dock { position: absolute; inset: 0; padding: 0 var(--gap) var(--gap); display: flex; }
@@ -146,6 +146,16 @@ code { font-family: var(--font-mono); }
 .readout b { font-weight: 400; color: var(--kc, var(--ink)); }
 .readout .sd-tag { justify-self: start; margin-top: var(--sp-1); font-family: var(--font-text); pointer-events: auto; }
 .corner { position: absolute; right: var(--sp-2); top: var(--sp-2); display: flex; gap: 2px; }
+
+/* text set over the 3D view: axis numbers and the probe's labels */
+.labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.labels span { position: absolute; left: 0; top: 0; white-space: nowrap; font: 11px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); text-shadow: 0 0 2px var(--bg), 0 0 5px var(--bg), 0 0 8px var(--bg); }
+.labels :is(.probe, .value) { padding: 3px 6px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--sheet) 86%, transparent); font-size: var(--fs-1); text-shadow: none; }
+.labels .probe { color: var(--c4); }
+.labels .value { color: var(--c3); }
+.phasekey { width: 6rem; height: 10px; border-radius: 3px; }
+.vbar .pair { display: inline-flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+.nogl { margin: var(--sp-4); }
 
 /* ── the input panel ── */
 .form { overflow: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: var(--sp-4); padding: var(--sp-4); }
