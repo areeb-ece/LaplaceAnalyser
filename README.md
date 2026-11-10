@@ -6,7 +6,8 @@ See what the Laplace transform does. Type a function, a transform or a different
 equation, and the same thing is shown eight ways at once: the signal in time, its
 transform $F(s)$ as a surface over the s-plane, the poles and zeros, the Laplace integral
 as a curve and as a sum of vectors, the signal rebuilt from one spinning vector per pole,
-and the algebra worked step by step.
+and the algebra worked step by step. Any combination of those views can be saved as a
+picture, or as a GIF or video with time playing.
 
 The views are inspired by 3Blue1Brown's video on the Laplace transform. The code and
 drawings here are this project's own.
@@ -59,9 +60,22 @@ The portfolio should reserve the path (add `laplaceanalyser` to `reservedSlugs` 
 | Function f(t) | Sums and products of numbers, powers of `t`, exponentials, sines and cosines | `t^2 e^(-2t) + sin(3t)` |
 | Transform F(s) | A ratio of polynomials in `s` whose denominator has the higher degree | `(s + 3)/((s + 1)(s^2 + 4))` |
 
-The **Examples** list has eleven starting points, among them a step, a decaying
-exponential, a cosine, a damped sinusoid, $t\,e^{-at}$, an RC circuit, an underdamped
-RLC circuit, a mass on a spring and an oscillator forced at resonance.
+The **Examples** list has 61 starting points from eleven fields, each with a line on
+what it models:
+
+| Field | Among the examples |
+| --- | --- |
+| Signals | step, ramp, exponentials, damped sinusoid, beats, a square wave's first harmonics, a plucked string |
+| Electric circuits | RC and RL switched on, RC with a sine source, LC, series RLC under-, over- and critically damped |
+| Filters and communications | low-pass and band-pass filters, Butterworth of order 3 and 4, an AM signal, a phase-locked loop |
+| Control systems | proportional and PI control, a DC motor, a double integrator, an inverted pendulum falling and held |
+| Mechanics and structures | mass on a spring, resonance and near-resonance, a seismometer, coupled masses, a car suspension, a loaded beam |
+| Heat and fluids | cooling, a lagging thermometer, tanks in series, a ball with air drag, river flow after a storm |
+| Chemistry and medicine | a decay chain, drug levels after an injection and after a tablet, blood sugar, a nerve cell |
+| Physics | radioactive decay, a kicked oscillator, a driven damped oscillator |
+| Probability and queues | exponential and Erlang waiting times, two stages at different rates |
+| Economics | present value of a growing income, a business cycle |
+| Aerospace | aircraft pitch (short period and phugoid), roll rate |
 
 ### Syntax
 
@@ -115,6 +129,28 @@ When the probe is left of the region of convergence the integral view shows the 
 running away and says so, while the surface still has a height there. That height is the
 analytic continuation of $F(s)$: the closed form, valid beyond where the integral is.
 
+### Saving pictures
+
+**Save image** opens a sheet with the picture on the right and its options on the left.
+
+| Option | Choices |
+| --- | --- |
+| Views and their sizes | Any of the seven plots and the worked steps, each small, medium or large. They are arranged to fill the picture, each as near its best shape as the others allow. |
+| Format | PNG, a GIF, or a video (MP4 or WebM, whichever the browser records). |
+| Shape | 16:9, 3:2, 4:3, 1:1, 3:4, 9:16, or any width and height up to 4096 px. |
+| Text and lines | Small, normal or large, independent of the picture's size in pixels. |
+| Sheet | The current theme, dark, or light for print; and a see-through background. |
+| Show | The title block (the problem, typeset), panel titles, keys and values, the probe point $s$, the time cursor. |
+| Time playing | For a GIF or video: how many seconds, and how many frames a second. Time runs from 0 to the end of the window. |
+
+- With the probe point switched off it disappears from the surface and the pole-zero
+  map; if a view still depends on $s$, the picture's footer says which $s$ it is for.
+- With the time cursor switched off, a still shows the whole window with no cursor
+  line, dot or value.
+- The credit line is always there, as in the other tools.
+- A GIF is encoded in the page (`js/lib/gif.js`); a video is recorded live, so it takes
+  as long as the clip.
+
 ### Panels
 
 Every view is a panel. Drag a panel's tab onto the edge of another to split it, or onto
@@ -144,10 +180,11 @@ Everything a mouse can do has a keyboard route. A panel is moved with its **⋯*
 npm test
 ```
 
-The maths, in Node with no browser: 21 transform pairs, 10 inverse transforms and 14
-differential equations against their textbook answers to $10^{-6}$, repeated and
-resonant poles, every refusal, the numerical integral against $F(s)$ to 1%, and the plot
-colours' contrast in all 15 themes.
+What needs no browser: 21 transform pairs, 10 inverse transforms and 14 differential
+equations against their textbook answers to $10^{-6}$, repeated and resonant poles,
+every refusal, every example, the numerical integral against $F(s)$ to 1%, the plot
+colours' contrast in all 15 themes, the GIF writer (read back by an independent
+decoder) and the layout of views in a picture.
 
 ```sh
 npm i --no-save playwright@1.56.1
@@ -160,7 +197,8 @@ npm run test:browser
 The whole app in Chromium at laptop and phone width: no script errors, no security
 policy violations, no request leaving the site, no sideways scroll; the probe drives
 every view in the same frame; panels move, resize, close, reopen and survive a reload;
-storage can be missing or corrupt. Screenshots go to `test-results/screenshots/`.
+every label is typeset; a PNG, a GIF and a video save with the size and options asked
+for; storage can be missing or corrupt. Screenshots go to `test-results/screenshots/`.
 
 ```sh
 DESIGN_DIR=../areeb-ece.github.io/public/design npm run test:browser
@@ -177,12 +215,15 @@ css/style.css           layout and local components, using only the shared token
 js/app.js               state, layouts, time transport, what is remembered
 js/store.js             the one shared state; tells every view once per frame what changed
 js/dock.js              the docking workspace: split tree, tabs, drag and drop, separators
-js/palette.js           plot colours resolved from the theme, for canvas and WebGL
-js/plot2d.js            shared 2D drawing: complex-plane axes, arrows, labels
+js/palette.js           plot colours resolved from a theme, for canvas and WebGL
+js/plot2d.js            shared 2D drawing: complex-plane axes, ticks, arrows
+js/math.js              KaTeX three ways: in the page, over a canvas, painted onto a canvas
+js/legend.js            a plot's key, drawn under it on the page and in saved pictures
 js/probe.js             the numerical integral at the probe, shared by two views
-js/math.js              KaTeX, loaded when first needed
 js/ui.js                DOM helpers, icons, the menu, safe storage
-js/views/               one module per view: { id, title, mount(el, store, actions) }
+js/views/               one module per view: { id, title, paint, legend, mount }
+js/export/render.js     a saved picture: the chosen views laid out and drawn
+js/export/dialog.js     the Save image sheet; PNG, GIF and video
 js/lib/                 the math engine (pure: no DOM, runs in Node)
   complex.js poly.js      complex numbers and polynomials
   roots.js                roots and their multiplicities
@@ -192,6 +233,8 @@ js/lib/                 the math engine (pure: no DOM, runs in Node)
   laplace.js              transform, partial fractions, inverse
   ode.js                  equation → Y(s)
   integrate.js            the Laplace integral, numerically
+  gif.js                  a GIF writer: palette by median cut, frame differences, LZW
+  treemap.js              fitting the chosen views into a picture
   tex.js                  results as TeX and as plain text
   analyse.js              the one entry point: input → model, or a refusal
   presets.js              the examples
@@ -236,6 +279,16 @@ form exactly, without a computer algebra system.
 
 The integral view never uses the closed form. It integrates $f(t)e^{-st}$ by Simpson's
 rule, so its agreement with $F(s)$ is a real check.
+
+### One drawing function per view
+
+Each plot is drawn by one function, `paint(g, state, options, cache)`, where `g` holds
+a canvas context, a size, a palette and a place to put labels. On the page that place
+is a layer of KaTeX elements over the canvas; for a saved picture the labels are
+collected and then painted onto the canvas glyph by glyph, read back from KaTeX's own
+layout, so a picture has exactly the typesetting the page shows. Axis numbers are drawn
+in KaTeX's faces. The same function serves any theme, any size, with or without the
+probe and the time cursor, and every frame of an animation.
 
 ### The surface
 
@@ -282,7 +335,7 @@ The one exception is the surface, whose hue is the phase itself.
 | Library | Version | Used for |
 | --- | --- | --- |
 | Three.js | 0.183.0 | The WebGL surface (core module only), loaded when that view first opens |
-| KaTeX | 0.19.0 | Typesetting the worked steps |
+| KaTeX | 0.19.0 | Typesetting all maths: worked steps, plot labels, keys, saved pictures |
 
 `npm run vendor` copies them from npm into `vendor/`. `package.json` itself has no
 dependencies.
@@ -290,8 +343,9 @@ dependencies.
 ## Privacy
 
 The page's Content Security Policy includes `connect-src 'none'`: it can't make network
-requests. There are no analytics. The layout and the last input are saved in
-`localStorage` under `laplaceanalyser.*`, and nowhere else.
+requests. There are no analytics. The layout, the last input and the Save image
+choices are kept in `localStorage` under `laplaceanalyser.*`, and nowhere else. Saved
+pictures are made in the page and handed straight to the browser's download.
 
 ## Licence
 

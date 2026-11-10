@@ -14,7 +14,8 @@ const ROLES = {
   accent: "--accent", tint: "--tint", well: "--well",
 };
 
-let cache = null, probeEl = null;
+const caches = new Map();
+let probeEl = null;
 
 // "rgb(1 2 3)", "rgba(1, 2, 3, .5)" or "color(srgb .1 .2 .3)" → [r, g, b] in 0–1.
 function parse(text) {
@@ -24,20 +25,30 @@ function parse(text) {
 }
 const css = (c, a = 1) => `rgb(${Math.round(c[0] * 255)} ${Math.round(c[1] * 255)} ${Math.round(c[2] * 255)} / ${a})`;
 
-export function palette() {
-  if (cache) return cache;
+/**
+ * The colours to draw with. theme is "current" (what the page shows) or the name of a
+ * theme, whose colours are read from a hidden element carrying that data-theme: the
+ * master defines every theme on such elements too, so a picture can be saved in the
+ * dark or the light sheet whatever the page is in.
+ */
+export function palette(theme = "current") {
+  if (caches.has(theme)) return caches.get(theme);
   if (!probeEl) { probeEl = document.createElement("i"); probeEl.hidden = true; document.body.append(probeEl); }
+  if (theme === "current") { probeEl.removeAttribute("data-theme"); probeEl.removeAttribute("data-scheme"); }
+  else { probeEl.setAttribute("data-theme", theme); probeEl.setAttribute("data-scheme", theme === "light" ? "light" : "dark"); }
   const root = getComputedStyle(document.documentElement), rgb = {};
   for (const [role, token] of Object.entries(ROLES)) {
     probeEl.style.setProperty("color", `var(${token})`);
     rgb[role] = parse(getComputedStyle(probeEl).color);
   }
-  const p = { rgb, light: /light/.test(root.colorScheme) && !/dark/.test(root.colorScheme) };
+  const scheme = theme === "current" ? root.colorScheme : getComputedStyle(probeEl).colorScheme;
+  const p = { rgb, theme, light: /light/.test(scheme) && !/dark/.test(scheme) };
   for (const role of Object.keys(ROLES)) p[role] = css(rgb[role]);
   p.alpha = (role, a) => css(rgb[role], a);
   p.mono = root.getPropertyValue("--font-mono").trim() || "monospace";
   p.text = root.getPropertyValue("--font-text").trim() || "sans-serif";
-  return (cache = p);
+  caches.set(theme, p);
+  return p;
 }
 
 /** Calls fn after the theme (or the visitor's accent or corners) changes. */
@@ -46,7 +57,7 @@ export function onThemeChange(fn) {
   const go = () => {
     if (queued) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; cache = null; fn(); });
+    requestAnimationFrame(() => { queued = false; caches.clear(); fn(); });
   };
   new MutationObserver(go).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-scheme", "style"] });
   // a stylesheet that arrives late (the offline copy of the design) changes the colours too

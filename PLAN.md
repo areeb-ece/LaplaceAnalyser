@@ -345,3 +345,23 @@ One role, one token, in every view:
 - **Not done: delayed steps** `u(t - a)`, the stretch goal. They are refused with a
   message. The surface shader assumes a ratio of polynomials, which a delay isn't.
 - **No worker was needed.** The surface's heights are computed on the GPU.
+
+## 15. After the first release
+
+Added at areeb's request, on the same architecture:
+
+- **Save as an image**, as in the other tools: a sheet with a live preview where the
+  views, their sizes, the picture's shape and size, the sheet, a see-through background
+  and what to show (title block, panel titles, keys, the probe point, the time cursor)
+  are chosen. Stills save as PNG; time playing saves as a GIF or a video.
+- **No new dependency for any of it.** The GIF writer (median-cut palette, frame
+  differences, LZW) and the layout of views in a picture are hand-written and unit
+  tested; video uses the browser's own `MediaRecorder`.
+- **Every view draws through one function**, used for the page and for pictures. This
+  replaced the per-view canvas code of the first release.
+- **All maths outside the input boxes is typeset with KaTeX**: plot labels, keys and
+  values, the time and probe readouts, the syntax sheet. KaTeX now loads with the page
+  rather than on first use. What to type is still shown as typed.
+- **Sixty-one examples in eleven fields**, each with a note on what it models.
+- **Not offered: SVG.** The other tools save SVG, but the surface is a WebGL raster, so
+  a vector file could only hold part of the picture.

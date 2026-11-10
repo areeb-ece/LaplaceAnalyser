@@ -77,8 +77,8 @@ code { font-family: var(--font-mono); }
 .strip { flex: none; display: flex; align-items: center; gap: var(--sp-3); min-height: var(--ctl-h-lg); padding: 0 var(--sp-4) var(--sp-2) var(--sp-5); background: var(--bg); }
 .strip .sd-range { flex: 1 1 12rem; min-width: 6rem; }
 .strip .play { min-width: 5.5rem; }
-.strip output { flex: none; min-width: 7.5rem; font: var(--fs-2) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
-.strip .probe { flex: none; display: inline-flex; align-items: center; gap: var(--sp-2); margin-left: var(--sp-3); font: var(--fs-2) var(--font-mono); color: var(--ink-2); }
+.strip output { flex: none; min-width: 7rem; font-size: var(--fs-2); color: var(--ink-2); }
+.strip .probe { flex: none; display: inline-flex; align-items: center; gap: var(--sp-2); margin-left: var(--sp-3); font-size: var(--fs-2); color: var(--ink-2); }
 .strip .probe .sd-input { width: 6rem; }
 
 .stage { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; isolation: isolate; }
@@ -135,25 +135,22 @@ code { font-family: var(--font-mono); }
 .vbar .sd-check { font-size: var(--fs-1); }
 .vbar .sd-range { width: 7rem; }
 .vbar .grow { flex: 1; }
-/* a key to the marks in a plot */
-.key { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); color: var(--ink-2); }
+/* a key to the marks in a plot, and the figures that go with it (legend.js) */
+.key { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-4); min-width: 0; color: var(--ink-2); }
 .key .k { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.key svg { width: 16px; height: 16px; flex: none; }
-.key .roc svg { color: var(--accent); }
-.key .sw { width: 14px; height: 0; border-top: 3px solid var(--kc, var(--ink)); border-radius: 2px; }
-/* figures under a plot: each value in the colour of what it measures */
-.figures { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.figures b, .key .fig { font: 400 var(--fs-1) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--kc, var(--ink)); }
-.figures .status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); font-family: var(--font-text); }
+.key canvas { flex: none; }
+.key .sd-tag { margin: 0; }
 .corner { position: absolute; right: var(--sp-2); top: var(--sp-2); display: flex; gap: 2px; }
 
-/* text set over the 3D view: axis numbers and the probe's labels */
-.labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.labels span { position: absolute; left: 0; top: 0; white-space: nowrap; font: 11px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); text-shadow: 0 0 2px var(--bg), 0 0 5px var(--bg), 0 0 8px var(--bg); }
-.labels :is(.probe, .value) { padding: 3px 6px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--sheet) 86%, transparent); font-size: var(--fs-1); text-shadow: none; }
-.labels .probe { color: var(--c4); }
-.labels .value { color: var(--c3); }
-.phasekey { width: 6rem; height: 10px; border-radius: 3px; }
+/* typeset maths over a plot (math.js): each label sits at a point the plot gives */
+.mlayer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.ml { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: var(--fs-1); line-height: 1.2; color: var(--ink); }
+.ml.halo { text-shadow: 0 0 2px var(--sheet), 0 0 2px var(--sheet), 0 0 4px var(--sheet), 0 0 6px var(--sheet); }
+.ml.shade { text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 5px var(--bg), 0 0 8px var(--bg); }
+.ml.chip { padding: 3px 6px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--sheet) 86%, transparent); }
+/* the same labels laid out off the page, to be measured and drawn into saved images */
+.mbench { position: fixed; left: -99999px; top: 0; visibility: hidden; pointer-events: none; }
+.mbench .ml { position: static; display: inline-block; }
 .vbar .pair { display: inline-flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
 .nogl { margin: var(--sp-4); }
 
@@ -162,7 +159,10 @@ code { font-family: var(--font-mono); }
 .form .sd-seg { display: flex; }
 .form .sd-seg button { flex: 1 1 0; height: auto; min-height: calc(var(--ctl-h) - 6px); padding: var(--sp-1) var(--sp-2); white-space: normal; line-height: 1.2; }
 .form .ics { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: var(--sp-3); }
-.form .ics .sd-label { font-family: var(--font-mono); font-weight: var(--fw-text); color: var(--ink-2); }
+.form .ics .sd-label { font-weight: var(--fw-text); color: var(--ink-2); }
+.form .about { text-wrap: pretty; }
+.form .about b { color: var(--ink-2); font-weight: var(--fw-strong); }
+.form .sd-hint code { font-size: .95em; color: var(--ink-2); }
 .readas { display: grid; gap: var(--sp-1); min-width: 0; color: var(--ink-3); font-size: var(--fs-1); }
 .readas .math { overflow-x: auto; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: var(--well); color: var(--ink); font-size: var(--fs-3); }
 
@@ -175,19 +175,39 @@ code { font-family: var(--font-mono); }
 .math .katex-display { margin: 0; text-align: left; }
 .math .katex-display > .katex { text-align: left; }
 
-/* ── decomposition: the phasors one by one, beside their sum ── */
-.decomp { flex: 1; min-height: 0; display: flex; }
-.minis { flex: none; width: 8.5rem; overflow: hidden auto; display: grid; align-content: start; gap: var(--sp-2); padding: var(--sp-2); border-right: 1px solid var(--rule-2); }
-.mini { display: grid; gap: 2px; justify-items: center; color: var(--ink-2); font-size: var(--fs-1); }
-.mini canvas { width: 100%; aspect-ratio: 1; border-radius: var(--r-sm); background: var(--well); }
-@container (max-width: 26rem) { .minis { display: none; } }
-
 /* ── the syntax sheet ── */
 .sd-dialog.help { width: min(720px, calc(100vw - 32px)); }
 .help .sd-body { display: grid; gap: var(--sp-5); }
 .help h3 { margin-bottom: var(--sp-2); font: var(--fw-head) var(--fs-3)/1.3 var(--font-text); }
 .help td:first-child { font-family: var(--font-mono); white-space: nowrap; }
+.help td:first-child .m { font-family: var(--font-text); }
 .help .src { margin-right: auto; align-self: center; font-size: var(--fs-1); }
+
+/* ── saving a picture: the options beside a preview (local: the master has no such sheet) ── */
+.sd-dialog.export { width: min(1120px, calc(100vw - 32px)); }
+.ex-grid { display: grid; grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+.ex-opts { display: grid; align-content: start; gap: var(--sp-4); max-height: min(64vh, 40rem); overflow: auto; overscroll-behavior: contain; padding: 2px var(--sp-2) 2px 2px; }
+.ex-opts .sd-seg { display: flex; }
+.ex-opts .sd-seg button { flex: 1 1 0; padding: 0 var(--sp-2); }
+.ex-view { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.ex-view .sd-seg { flex: none; display: inline-flex; min-height: var(--ctl-h-sm); }
+.ex-view .sd-seg button { flex: none; height: calc(var(--ctl-h-sm) - 6px); }
+.ex-shape { display: flex; align-items: center; gap: var(--sp-2); color: var(--ink-2); font-size: var(--fs-1); }
+.ex-shape .sd-select { flex: 1 1 6rem; }
+.ex-shape .sd-input { flex: 0 1 5rem; min-width: 4rem; }
+.ex-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.ex-side { display: grid; gap: var(--sp-2); min-width: 0; }
+.ex-frame { display: grid; place-items: center; min-height: 12rem; padding: var(--sp-3); border-radius: var(--r); background: var(--well); }
+/* a see-through picture is shown over a chequerboard */
+.ex-frame[data-clear] { background: repeating-conic-gradient(var(--sheet-2) 0 25%, var(--card-hover) 0 50%) 0 0 / 18px 18px; }
+.ex-canvas { display: block; max-width: 100%; max-height: min(58vh, 36rem); border-radius: var(--r-sm); }
+.export > footer { align-items: center; }
+.export progress { flex: 1 1 8rem; height: 6px; accent-color: var(--accent); }
+.ex-status { flex: 1 1 12rem; margin: 0; font-size: var(--fs-1); color: var(--ink-2); }
+@media (max-width: 760px) {
+  .ex-grid { grid-template-columns: minmax(0, 1fr); }
+  .ex-opts { max-height: none; }
+}
 
 /* ── narrow screens: one column, every open view under the last ── */
 .dock[data-mode="stacked"] { position: static; display: grid; gap: var(--gap); align-content: start; padding: 0 var(--gap) var(--sp-6); }
@@ -201,6 +221,7 @@ code { font-family: var(--font-mono); }
   .strip { position: sticky; top: 0; z-index: var(--z-sticky); flex-wrap: wrap; padding: var(--sp-2) var(--sp-3); }
   .stage { overflow: visible; }
   .layouts { display: none; }
+  #btnImage .lbl { display: none; }
   .brand .by { display: none; }
 }
 @media (max-width: 520px) {

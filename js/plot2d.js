@@ -27,7 +27,7 @@ export function niceStep(span, count) {
   const raw = span / Math.max(1, count), e = 10 ** Math.floor(Math.log10(raw)), f = raw / e;
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e;
 }
-const tidy = (v, step) => { const r = Math.round(v / step) * step; return Math.abs(r) < step / 1e6 ? 0 : Number(r.toPrecision(10)); };
+export const tidy = (v, step) => { const r = Math.round(v / step) * step; return Math.abs(r) < step / 1e6 ? 0 : Number(r.toPrecision(10)); };
 export const tickText = (v) => String(v).replace("-", "−");
 
 /**
@@ -51,6 +51,23 @@ export function fitWindow(points, margin = 1.18, least = 1e-9) {
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, half: Math.max(least, (margin * Math.max(x1 - x0, y1 - y0)) / 2) };
 }
 
+// Tick labels are set in KaTeX's own faces (upright digits, an italic i), so the numbers
+// on the axes match the typeset labels beside them.
+const DIGITS = "12px KaTeX_Main, serif", ITALIC = "italic 12px KaTeX_Math, serif";
+/** A number on an axis; with imag, followed by an italic i (and 1i, −1i read i, −i). */
+export function tick(ctx, v, x, y, align = "center", baseline = "middle", imag = false) {
+  const num = imag && Math.abs(v) === 1 ? (v < 0 ? "−" : "") : tickText(v);
+  ctx.font = DIGITS;
+  ctx.textBaseline = baseline; ctx.textAlign = "left";
+  const wn = ctx.measureText(num).width;
+  let wi = 0;
+  if (imag) { ctx.font = ITALIC; wi = ctx.measureText("i").width; }
+  const left = align === "center" ? x - (wn + wi) / 2 : align === "right" ? x - wn - wi : x;
+  ctx.font = DIGITS;
+  ctx.fillText(num, left, y);
+  if (imag) { ctx.font = ITALIC; ctx.fillText("i", left + wn, y); }
+}
+
 /** Grid, axes and tick labels of a complex plane. Imaginary ticks read i, 2i, −i. */
 export function drawPlane(ctx, f, pal, { labels = true } = {}) {
   const step = niceStep(Math.max(f.w, f.h) / f.k, Math.max(f.w, f.h) / 72);
@@ -67,19 +84,16 @@ export function drawPlane(ctx, f, pal, { labels = true } = {}) {
   ctx.moveTo(ax, 0); ctx.lineTo(ax, f.h); ctx.moveTo(0, ay); ctx.lineTo(f.w, ay);
   ctx.stroke();
   if (!labels) return;
-  ctx.font = `11px ${pal.mono}`;
   ctx.fillStyle = pal.ink3;
   // labels sit by their axis, or along the edge when the axis is out of view
-  const ly = Math.min(Math.max(ay + 5, 4), f.h - 16), lx = Math.min(Math.max(ax - 6, 30), f.w - 4);
-  ctx.textBaseline = "top"; ctx.textAlign = "center";
+  const ly = Math.min(Math.max(ay + 5, 4), f.h - 17), lx = Math.min(Math.max(ax - 6, 30), f.w - 4);
   for (let v = Math.ceil(reLo / step) * step; v <= reHi; v += step) {
     const t = tidy(v, step);
-    if (t !== 0 && f.x(t) > 16 && f.x(t) < f.w - 16) ctx.fillText(tickText(t), f.x(t), ly);
+    if (t !== 0 && f.x(t) > 16 && f.x(t) < f.w - 16) tick(ctx, t, f.x(t), ly, "center", "top");
   }
-  ctx.textBaseline = "middle"; ctx.textAlign = "right";
   for (let v = Math.ceil(imLo / step) * step; v <= imHi; v += step) {
     const t = tidy(v, step);
-    if (t !== 0 && f.y(t) > 10 && f.y(t) < f.h - 10) ctx.fillText((t === 1 ? "" : t === -1 ? "−" : tickText(t)) + "i", lx, f.y(t));
+    if (t !== 0 && f.y(t) > 10 && f.y(t) < f.h - 10) tick(ctx, t, lx, f.y(t), "right", "middle", true);
   }
 }
 
@@ -99,16 +113,6 @@ export function arrow(ctx, x0, y0, x1, y1, color, width = 2, head = 9) {
   ctx.lineTo(x1 - ux * hl - uy * hw, y1 - uy * hl + ux * hw);
   ctx.closePath();
   ctx.fill();
-}
-
-/** Text with a halo of the sheet colour, so it stays readable over lines. */
-export function label(ctx, text, x, y, color, pal, { align = "left", baseline = "alphabetic", size = 12 } = {}) {
-  ctx.font = `${size}px ${pal.mono}`;
-  ctx.textAlign = align; ctx.textBaseline = baseline;
-  ctx.lineJoin = "round"; ctx.lineWidth = 4; ctx.strokeStyle = pal.sheet;
-  ctx.strokeText(text, x, y);
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
 }
 
 /** A dot with a ring of the sheet colour round it. */

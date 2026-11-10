@@ -4,6 +4,8 @@ import { createStore, ALL } from "./store.js";
 import { createDock, stack, row, col } from "./dock.js";
 import { h, icon, attachMenu, storage, clear } from "./ui.js";
 import { onThemeChange } from "./palette.js";
+import { tex } from "./math.js";
+import { createExporter } from "./export/dialog.js";
 import { analyse } from "./lib/analyse.js";
 import { fmt } from "./lib/tex.js";
 import { PRESETS, DEFAULT_PRESET } from "./lib/presets.js";
@@ -47,7 +49,7 @@ const first = restore();
 let model = analyse(first.input);
 if (!model.ok) { first.input = { ...EMPTY }; model = analyse(first.input); }
 const store = createStore({
-  input: first.input, model, error: null, probe: first.probe, opts: first.opts,
+  input: first.input, model, error: null, preset: null, probe: first.probe, opts: first.opts,
   time: { t: model.tWindow, tMax: model.tWindow, playing: false, speed: 1 },
   win: { ...model.sWindow },
 });
@@ -59,17 +61,22 @@ const actions = {
   setInput(part) {
     const next = { ...state.input, ...part }, m = analyse(next);
     store.set("input", next);
+    store.set("preset", null); // typed over: no longer the example as it was loaded
     store.set("error", m.ok ? null : m.message);
     if (!m.ok) return;
     store.set("model", m);
     store.set("time", { ...state.time, t: m.tWindow, tMax: m.tWindow, playing: false });
     store.set("win", { ...m.sWindow });
   },
+  /** Load a built-in example: its input, how much time to show, and where the probe goes. */
   loadPreset(id) {
     const p = PRESETS.find((x) => x.id === id);
     if (!p) return;
     actions.setInput(p.input);
-    store.set("probe", { re: p.probe[0], im: p.probe[1] });
+    store.set("preset", id);
+    if (p.tMax) store.set("time", { ...state.time, t: p.tMax, tMax: p.tMax });
+    // unless the example says where, half a unit into the region of convergence
+    store.set("probe", p.probe ? { re: p.probe[0], im: p.probe[1] } : { re: Math.round((state.model.roc + 0.5) * 2) / 2, im: 1 });
   },
 };
 
@@ -103,6 +110,10 @@ document.getElementById("btnReset").addEventListener("click", () => { storage.re
 attachMenu(document.getElementById("btnViews"), () => VIEWS.map((v) => ({
   label: v.title, checked: dock.isOpen(v.id), run: () => (dock.isOpen(v.id) ? dock.close(v.id) : dock.open(v.id)),
 })));
+// Saving pictures: a view that was never opened is made now, off the page, so it can be drawn.
+const instance = (id) => { dock.elFor(id); return made[id].view; };
+const exporter = createExporter({ store, views: VIEWS, instance, openIds: () => VIEWS.map((v) => v.id).filter((id) => dock.isOpen(id)) });
+document.getElementById("btnImage").addEventListener("click", () => exporter.open());
 const narrow = matchMedia("(max-width: 899px)");
 const setNarrow = () => dock.setStacked(narrow.matches);
 narrow.addEventListener("change", setNarrow);
@@ -140,7 +151,7 @@ function drawTransport() {
   }
   range.max = String(tMax);
   range.value = String(t);
-  out.textContent = `t = ${t.toFixed(tMax >= 100 ? 1 : 2)} s`;
+  tex(out, `t = ${t.toFixed(tMax >= 100 ? 1 : 2)}\\ \\mathrm{s}`);
   range.setAttribute("aria-valuetext", `${fmt(t)} seconds of ${fmt(tMax)}`);
   for (const b of speedSeg.children) b.setAttribute("aria-checked", String(Number(b.dataset.speed) === speed));
 }
@@ -176,9 +187,12 @@ store.on((s, dirty) => {
     saveTimer = setTimeout(() => storage.set(STATE_KEY, { v: VERSION, input: s.input, probe: s.probe, opts: s.opts }), 300);
   }
 });
+for (const el of document.querySelectorAll("[data-m]")) tex(el, el.dataset.m); // maths written into the page itself
 drawTransport();
 drawProbe();
 onThemeChange(() => store.touch("theme"));
+// The plots' axis numbers are drawn in KaTeX's faces: draw again once those have loaded.
+Promise.all(["12px KaTeX_Main", "italic 12px KaTeX_Math"].map((f) => document.fonts.load(f))).then(() => store.touch("theme"), () => {});
 
 // ── the syntax sheet, the skip link and the offline light/dark switch ──
 const help = document.getElementById("help");

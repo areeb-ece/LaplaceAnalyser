@@ -18,6 +18,11 @@ has the architecture and the commands; `PLAN.md` has the reasoning behind the de
   that isn't colour, because some themes are nearly monochrome.
 - **The engine (`js/lib/`) is pure**: no DOM, runs in Node, never imports from outside
   its folder. Views draw what it returns and do no maths of their own.
+- **A view draws through its `paint` function only**, which must not touch the DOM or
+  the store: the same function draws the page and every saved picture, in any theme and
+  at any size. Labels go to `g.math`; keys are described by `legend`.
+- **Maths that isn't being typed is typeset** (`js/math.js`), never written out as
+  text. What the user should type stays in the code face.
 - **Never show a silently wrong result.** Input the engine can't handle is refused with
   an `InputError` whose message says what's wrong and what to type instead. Anything
   ambiguous (`e^-2t`, `1/2t`) is asked about, not guessed.
