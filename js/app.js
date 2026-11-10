@@ -4,6 +4,8 @@ import { createStore, ALL } from "./store.js";
 import { createDock, stack, row, col } from "./dock.js";
 import { h, icon, attachMenu, storage, clear } from "./ui.js";
 import { onThemeChange } from "./palette.js";
+import { tex } from "./math.js";
+import { createExporter } from "./export/dialog.js";
 import { analyse } from "./lib/analyse.js";
 import { fmt } from "./lib/tex.js";
 import { PRESETS, DEFAULT_PRESET } from "./lib/presets.js";
@@ -103,6 +105,10 @@ document.getElementById("btnReset").addEventListener("click", () => { storage.re
 attachMenu(document.getElementById("btnViews"), () => VIEWS.map((v) => ({
   label: v.title, checked: dock.isOpen(v.id), run: () => (dock.isOpen(v.id) ? dock.close(v.id) : dock.open(v.id)),
 })));
+// Saving pictures: a view that was never opened is made now, off the page, so it can be drawn.
+const instance = (id) => { dock.elFor(id); return made[id].view; };
+const exporter = createExporter({ store, views: VIEWS, instance, openIds: () => VIEWS.map((v) => v.id).filter((id) => dock.isOpen(id)) });
+document.getElementById("btnImage").addEventListener("click", () => exporter.open());
 const narrow = matchMedia("(max-width: 899px)");
 const setNarrow = () => dock.setStacked(narrow.matches);
 narrow.addEventListener("change", setNarrow);
@@ -140,7 +146,7 @@ function drawTransport() {
   }
   range.max = String(tMax);
   range.value = String(t);
-  out.textContent = `t = ${t.toFixed(tMax >= 100 ? 1 : 2)} s`;
+  tex(out, `t = ${t.toFixed(tMax >= 100 ? 1 : 2)}\\ \\mathrm{s}`);
   range.setAttribute("aria-valuetext", `${fmt(t)} seconds of ${fmt(tMax)}`);
   for (const b of speedSeg.children) b.setAttribute("aria-checked", String(Number(b.dataset.speed) === speed));
 }
@@ -176,9 +182,12 @@ store.on((s, dirty) => {
     saveTimer = setTimeout(() => storage.set(STATE_KEY, { v: VERSION, input: s.input, probe: s.probe, opts: s.opts }), 300);
   }
 });
+for (const el of document.querySelectorAll("[data-m]")) tex(el, el.dataset.m); // maths written into the page itself
 drawTransport();
 drawProbe();
 onThemeChange(() => store.touch("theme"));
+// The plots' axis numbers are drawn in KaTeX's faces: draw again once those have loaded.
+Promise.all(["12px KaTeX_Main", "italic 12px KaTeX_Math"].map((f) => document.fonts.load(f))).then(() => store.touch("theme"), () => {});
 
 // ── the syntax sheet, the skip link and the offline light/dark switch ──
 const help = document.getElementById("help");

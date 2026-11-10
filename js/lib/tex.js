@@ -220,3 +220,21 @@ export function fmtComplex(z, places = 2) {
   const r = z.re.toFixed(places).replace("-", "−"), i = Math.abs(z.im).toFixed(places);
   return `${/^−?0\.?0*$/.test(r) ? r.replace("−", "") : r} ${z.im < 0 ? "−" : "+"} ${i}i`;
 }
+
+// ── numbers as TeX, for labels that change as something is dragged ──
+/** A number to a few significant figures. */
+export function texNum(x, sig = 3) {
+  if (!Number.isFinite(x)) return x > 0 ? "\\infty" : x < 0 ? "-\\infty" : "?";
+  if (Math.abs(x) < 1e-12) return "0";
+  const a = Math.abs(x);
+  if (a >= 1e5 || a < 1e-3) {
+    const e = Math.floor(Math.log10(a)), mant = Number((x / 10 ** e).toPrecision(sig));
+    return `${mant}\\times10^{${e}}`;
+  }
+  return String(Number(x.toPrecision(sig)));
+}
+/** A complex number with fixed decimals: 0.06 + 0.78i. */
+export function texComplex(z, places = 2) {
+  const re = z.re.toFixed(places), im = Math.abs(z.im).toFixed(places);
+  return `${/^-0\.?0*$/.test(re) ? re.slice(1) : re} ${z.im < 0 ? "-" : "+"} ${im}i`;
+}

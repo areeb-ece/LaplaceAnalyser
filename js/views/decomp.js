@@ -1,12 +1,14 @@
 // The signal taken apart: each pole p contributes one phasor, its residue times e^(pt),
 // turning at the pole's imaginary part and growing or shrinking at its real part. Laid
 // tip to tail they add up to f(t). Conjugate pairs cancel each other's imaginary parts,
-// so the sum stays on the real axis, where it draws the signal as time runs.
-import { h, clear } from "../ui.js";
+// so the sum stays on the real axis, where it draws the signal as time runs. Down the
+// left, each e^(pt) on its own.
+import { h } from "../ui.js";
 import { palette } from "../palette.js";
+import { mathLayer } from "../math.js";
+import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, drawPlane, arrow, dot } from "../plot2d.js";
-import { typeset } from "../math.js";
-import { cplx, fmt } from "../lib/tex.js";
+import { cplx, texNum } from "../lib/tex.js";
 
 const TRACE = 1.7; // how far down the trace of past values hangs, in units of the phasors' reach
 
@@ -28,98 +30,111 @@ function phasor(p, t) {
   const m = Math.exp(p.s.re * t), c = m * Math.cos(p.s.im * t), s = m * Math.sin(p.s.im * t);
   return [ar * c - ai * s, ar * s + ai * c];
 }
+// e^(pt) as TeX: e^{-2t}, e^{it}, e^{(-1+3i)t}.
+function expTex(p) {
+  if (p.s.re === 0 && p.s.im === 0) return "e^{0t} = 1";
+  const c = cplx(p.s);
+  return `e^{${p.s.re !== 0 && p.s.im !== 0 ? `(${c})` : c === "1" ? "" : c === "-1" ? "-" : c}t}`;
+}
+function build(state, cache) {
+  const { model, time } = state;
+  if (cache.model === model && cache.tMax === time.tMax) return cache;
+  const chain = chainOf(model);
+  let reach = 1e-9; // how far from the origin any point of the chain gets
+  for (let i = 0; i <= 240; i++) {
+    let x = 0, y = 0;
+    for (const p of chain) { const v = phasor(p, (time.tMax * i) / 240); x += v[0]; y += v[1]; reach = Math.max(reach, Math.hypot(x, y)); }
+  }
+  return Object.assign(cache, { model, tMax: time.tMax, chain, reach });
+}
+const sumAt = (chain, t) => chain.reduce((x, p) => x + phasor(p, t)[0], 0);
 
-export default {
-  id: "decomp", title: "Decomposition",
-  mount(el, store) {
-    const minis = h("div", { class: "minis" }), box = h("div", { class: "plot" });
-    const value = h("b", { class: "fig", vars: { "--kc": "var(--c0)" } });
-    const key = h("span", { class: "key" });
-    el.append(h("div", { class: "decomp" }, minis, box), h("div", { class: "vbar" }, key));
-    const cv = fitCanvas(box, draw), { canvas, ctx } = cv;
-    box.prepend(canvas);
-    canvas.setAttribute("role", "img");
-
-    let built = null; // what depends on the model and the time window only
-    function build() {
-      const { model, time } = store.state;
-      if (built && built.model === model && built.tMax === time.tMax) return built;
-      const chain = chainOf(model);
-      // how far from the origin any point of the chain gets
-      let reach = 1e-9;
-      for (let i = 0; i <= 240; i++) {
-        let x = 0, y = 0;
-        for (const p of chain) { const v = phasor(p, (time.tMax * i) / 240); x += v[0]; y += v[1]; reach = Math.max(reach, Math.hypot(x, y)); }
-      }
-      // the small panels: e^(pt) alone, one per pole
-      clear(minis);
-      const panels = chain.map((p) => {
-        const c = h("canvas", { width: 220, height: 220 }), cap = h("span");
-        typeset(cap, p.s.re === 0 && p.s.im === 0 ? "e^{0t} = 1" : `e^{${p.s.re !== 0 && p.s.im !== 0 ? `(${cplx(p.s)})` : cplx(p.s) === "1" ? "" : cplx(p.s) === "-1" ? "-" : cplx(p.s)}t}`, true);
-        minis.append(h("div", { class: "mini" }, c, cap));
-        return { c, half: 1.25 * Math.max(1, Math.min(1e6, Math.exp(p.s.re * time.tMax))) };
-      });
-      clear(key);
-      const roles = new Set(chain.map((p) => p.role));
-      const sw = (token, text) => h("span", { class: "k" }, h("span", { class: "sw", vars: { "--kc": `var(${token})` } }), text);
-      if (roles.has("phUp")) key.append(sw("--c5", "Poles above the axis"), sw("--c7", "Their conjugates"));
-      if (roles.has("phReal")) key.append(sw("--c1", "Real poles"));
-      key.append(h("span", { class: "k" }, h("span", { class: "sw", vars: { "--kc": "var(--c0)" } }), `Their sum, ${model.sig}(t) =`, value));
-      return (built = { model, tMax: time.tMax, chain, reach, panels });
-    }
-
-    function draw() {
-      const { model, time } = store.state, { w, h: hgt } = cv.size;
-      if (!w || !model) return;
-      const pal = palette(), b = build(), R = b.reach * 1.15, D = b.reach * TRACE, t = time.t;
-      // the plane holds the phasors (within R of the origin) and the trace hanging below
-      const boxH = R + Math.max(R, D), k = Math.min(w / (2 * R), hgt / boxH);
-      const oy = (hgt - boxH * k) / 2 + R * k;
-      const f = { w, h: hgt, k, x: (re) => w / 2 + re * k, y: (im) => oy - im * k, re: (x) => (x - w / 2) / k, im: (y) => (oy - y) / k };
-      ctx.clearRect(0, 0, w, hgt);
-      drawPlane(ctx, f, pal);
-      // the past values of the sum, newest at the axis
-      const n = 400, from = Math.max(0, t - time.tMax);
-      ctx.strokeStyle = pal.signal; ctx.lineWidth = 2; ctx.lineJoin = "round";
+/** Draw the small e^(pt) panels (where there's room), the phasor chain and the trace of its sum. */
+export function paintDecomp(g, state, o, cache) {
+  const { ctx, w: full, h: hgt, pal, math } = g, { time } = state, b = build(state, cache), t = time.t, n = b.chain.length;
+  // ── the small panels: one or two columns down the left, each as big as fits ──
+  const cols = n > 5 ? 2 : 1, rows = Math.ceil(n / cols), size = Math.min(92, Math.floor((hgt - 8) / rows) - 26);
+  const strip = full >= 360 && size >= 34 ? cols * (size + 10) + 6 : 0;
+  if (strip) {
+    b.chain.forEach((p, i) => {
+      const x0 = 8 + (i % cols) * (size + 10), y0 = 8 + Math.floor(i / cols) * (size + 26);
+      const m = planeFrame(size, size, { cx: 0, cy: 0, half: 1.25 * Math.max(1, Math.min(1e6, Math.exp(p.s.re * time.tMax))) });
+      ctx.save();
+      ctx.translate(x0, y0);
+      ctx.fillStyle = pal.well; ctx.beginPath(); ctx.roundRect(0, 0, size, size, 6); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(0, 0, size, size, 6); ctx.clip();
+      ctx.lineWidth = 1; ctx.strokeStyle = pal.ink4;
+      ctx.beginPath(); ctx.moveTo(0, m.y(0)); ctx.lineTo(size, m.y(0)); ctx.moveTo(m.x(0), 0); ctx.lineTo(m.x(0), size); ctx.stroke();
+      ctx.strokeStyle = pal.rule; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(m.x(0), m.y(0), m.k, 0, 2 * Math.PI); ctx.stroke(); // the unit circle
+      ctx.setLineDash([]);
+      ctx.strokeStyle = pal.alpha(p.role, 0.5); ctx.lineWidth = 1.5;
       ctx.beginPath();
-      for (let i = 0; i <= n; i++) {
-        const tau = t - ((t - from) * i) / n;
-        let x = 0;
-        for (const p of b.chain) x += phasor(p, tau)[0];
-        const px = f.x(x), py = oy + ((t - tau) / time.tMax) * D * k;
-        if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      for (let j = 0; j <= 160; j++) {
+        const tau = (t * j) / 160, r = Math.exp(p.s.re * tau), px = m.x(r * Math.cos(p.s.im * tau)), py = m.y(r * Math.sin(p.s.im * tau));
+        if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py);
       }
       ctx.stroke();
-      // the phasors, tip to tail
-      let x = 0, y = 0;
-      for (const p of b.chain) {
-        const v = phasor(p, t);
-        arrow(ctx, f.x(x), f.y(y), f.x(x + v[0]), f.y(y + v[1]), pal[p.role], 2.5, 10);
-        x += v[0]; y += v[1];
-      }
-      dot(ctx, f.x(x), f.y(0), pal.signal, pal, 5);
-      value.textContent = fmt(x, 4);
-      canvas.setAttribute("aria-label", `One rotating vector per pole, added tip to tail. Their sum is ${model.sig} of t, ${fmt(x, 4)} at the time cursor.`);
-      // the small panels
-      b.chain.forEach((p, i) => {
-        const { c, half } = b.panels[i], g = c.getContext("2d"), m = planeFrame(c.width, c.height, { cx: 0, cy: 0, half });
-        g.clearRect(0, 0, c.width, c.height);
-        g.lineWidth = 2;
-        g.strokeStyle = pal.ink4;
-        g.beginPath(); g.moveTo(0, m.y(0)); g.lineTo(c.width, m.y(0)); g.moveTo(m.x(0), 0); g.lineTo(m.x(0), c.height); g.stroke();
-        g.strokeStyle = pal.rule; g.setLineDash([6, 6]);
-        g.beginPath(); g.arc(m.x(0), m.y(0), m.k, 0, 2 * Math.PI); g.stroke(); // the unit circle
-        g.setLineDash([]);
-        g.strokeStyle = pal.alpha(p.role, 0.5); g.lineWidth = 3;
-        g.beginPath();
-        for (let j = 0; j <= 160; j++) {
-          const tau = (t * j) / 160, r = Math.exp(p.s.re * tau), px = m.x(r * Math.cos(p.s.im * tau)), py = m.y(r * Math.sin(p.s.im * tau));
-          if (j) g.lineTo(px, py); else g.moveTo(px, py);
-        }
-        g.stroke();
-        const r = Math.exp(p.s.re * t);
-        arrow(g, m.x(0), m.y(0), m.x(r * Math.cos(p.s.im * t)), m.y(r * Math.sin(p.s.im * t)), pal[p.role], 5, 20);
-      });
+      const r = Math.exp(p.s.re * t);
+      arrow(ctx, m.x(0), m.y(0), m.x(r * Math.cos(p.s.im * t)), m.y(r * Math.sin(p.s.im * t)), pal[p.role], 2.2, 9);
+      ctx.restore();
+      math(expTex(p), x0 + size / 2, y0 + size + 11, { align: "center", color: pal.ink2, size: 11, halo: false });
+    });
+    ctx.strokeStyle = pal.rule2; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(strip + 0.5, 0); ctx.lineTo(strip + 0.5, hgt); ctx.stroke();
+  }
+  // ── the plane: the phasors within R of the origin, the trace hanging below ──
+  const w = full - strip, R = b.reach * 1.15, D = b.reach * TRACE;
+  const boxH = R + Math.max(R, D), k = Math.min(w / (2 * R), hgt / boxH), oy = (hgt - boxH * k) / 2 + R * k;
+  const f = { w, h: hgt, k, x: (re) => w / 2 + re * k, y: (im) => oy - im * k, re: (x) => (x - w / 2) / k, im: (y) => (oy - y) / k };
+  ctx.save();
+  ctx.translate(strip, 0);
+  ctx.beginPath(); ctx.rect(0, 0, w, hgt); ctx.clip();
+  drawPlane(ctx, f, pal);
+  // the past values of the sum, newest at the axis
+  const steps = 400, from = Math.max(0, t - time.tMax);
+  ctx.strokeStyle = pal.signal; ctx.lineWidth = 2; ctx.lineJoin = "round";
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const tau = t - ((t - from) * i) / steps, px = f.x(sumAt(b.chain, tau)), py = oy + ((t - tau) / time.tMax) * D * k;
+    if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.stroke();
+  let x = 0, y = 0;
+  for (const p of b.chain) {
+    const v = phasor(p, t);
+    arrow(ctx, f.x(x), f.y(y), f.x(x + v[0]), f.y(y + v[1]), pal[p.role], 2.5, 10);
+    x += v[0]; y += v[1];
+  }
+  dot(ctx, f.x(x), f.y(0), pal.signal, pal, 5);
+  ctx.restore();
+}
+/** Which colour is which kind of pole, and the sum's value. */
+export function decompLegend(state, o, cache = {}) {
+  const b = build(state, cache), roles = new Set(b.chain.map((p) => p.role)), out = [];
+  if (roles.has("phUp")) out.push({ mark: "arrow", role: "phUp", text: "Poles above the axis" }, { mark: "arrow", role: "phDown", text: "Their conjugates" });
+  if (roles.has("phReal")) out.push({ mark: "arrow", role: "phReal", text: "Real poles" });
+  out.push({ mark: "line", role: "signal", text: "Their sum,", tint: true, tex: `${state.model.sig}(${texNum(state.time.t)}) = ${texNum(sumAt(b.chain, state.time.t), 4)}` });
+  return out;
+}
+
+export default {
+  id: "decomp", title: "Decomposition", paint: paintDecomp, legend: decompLegend,
+  mount(el, store) {
+    const box = h("div", { class: "plot" }), key = h("span", { class: "key" });
+    el.append(box, h("div", { class: "vbar" }, key));
+    const cache = {}, cv = fitCanvas(box, draw), { canvas, ctx } = cv, layer = mathLayer(box);
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "One rotating vector per pole, added tip to tail; their sum traces the signal.");
+    function draw() {
+      const { w, h: hgt } = cv.size;
+      if (!w || !store.state.model) return;
+      const pal = palette();
+      ctx.clearRect(0, 0, w, hgt);
+      layer.begin();
+      paintDecomp({ ctx, w, h: hgt, pal, math: layer.put }, store.state, { cursor: true }, cache);
+      layer.end();
+      legendDom(key, decompLegend(store.state, {}, cache), pal);
     }
     return { update(state, dirty) { if (dirty.has("model") || dirty.has("time") || dirty.has("theme")) draw(); } };
   },

@@ -2,78 +2,89 @@
 // probe point s. Dragging the background moves the window that the surface also shows.
 import { h, icon } from "../ui.js";
 import { palette } from "../palette.js";
-import { fitCanvas, planeFrame, drawPlane, label } from "../plot2d.js";
-import { fmtComplex } from "../lib/tex.js";
+import { mathLayer } from "../math.js";
+import { legendDom } from "../legend.js";
+import { fitCanvas, planeFrame, drawPlane } from "../plot2d.js";
+import { texComplex } from "../lib/tex.js";
 
 const GRAB = 16; // pixels from the probe within which a press takes hold of it
 
+/** Draw the map. o.probe: whether to mark the probe point. */
+export function paintPz(g, state, o) {
+  const { ctx, w, h: hgt, pal, math } = g, { model, probe } = state;
+  const f = planeFrame(w, hgt, state.win);
+  // where the integral converges: everything right of the rightmost pole
+  const edge = Math.max(0, Math.min(w, f.x(model.roc)));
+  if (edge < w) {
+    ctx.fillStyle = pal.alpha("accent", 0.1);
+    ctx.fillRect(edge, 0, w - edge, hgt);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(edge, 0, w - edge, hgt); ctx.clip();
+    ctx.strokeStyle = pal.alpha("accent", 0.16); ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let d = -hgt; d < w; d += 12) { ctx.moveTo(d, hgt); ctx.lineTo(d + hgt, 0); }
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawPlane(ctx, f, pal);
+  if (edge > 0 && edge < w) {
+    ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(edge, 0); ctx.lineTo(edge, hgt); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.lineCap = "round";
+  const times = (z, mult) => { if (mult > 1) math(`\\times ${mult}`, f.x(z.re) + 9, f.y(z.im) - 11, { color: pal.ink2, size: 11 }); };
+  for (const z of model.zeros) {
+    ctx.strokeStyle = pal.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(f.x(z.s.re), f.y(z.s.im), 6, 0, 2 * Math.PI); ctx.stroke();
+    times(z.s, z.mult);
+  }
+  for (const p of model.poles) {
+    const x = f.x(p.s.re), y = f.y(p.s.im);
+    ctx.strokeStyle = pal.sheet; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6); ctx.stroke();
+    ctx.strokeStyle = pal.ink; ctx.lineWidth = 2.4;
+    ctx.stroke();
+    times(p.s, p.mult);
+  }
+  if (!o.probe) return;
+  const px = f.x(probe.re), py = f.y(probe.im);
+  ctx.strokeStyle = pal.sheet; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.stroke();
+  ctx.strokeStyle = pal.probe; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = pal.probe;
+  ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 2 * Math.PI); ctx.fill();
+  const left = px > w - 160;
+  math("s = " + texComplex(probe), px + (left ? -13 : 13), py - 16, { color: pal.probe, align: left ? "right" : "left" });
+}
+/** The key to the map's marks. */
+export const pzLegend = () => [
+  { mark: "cross", role: "ink", text: "Pole" },
+  { mark: "ring", role: "ink", text: "Zero" },
+  { mark: "hatch", role: "accent", text: "Integral converges" },
+];
+
 export default {
-  id: "pz", title: "Pole-zero map",
+  id: "pz", title: "Pole-zero map", paint: paintPz, legend: pzLegend,
   mount(el, store) {
-    const box = h("div", { class: "plot" });
-    const svg = (d, extra = "") => { const t = document.createElement("template"); t.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ${extra}>${d}</svg>`; return t.content.firstChild; };
-    const bar = h("div", { class: "vbar" },
-      h("span", { class: "key" },
-        h("span", { class: "k" }, svg('<path d="M4 4l8 8M12 4l-8 8"/>'), "Pole"),
-        h("span", { class: "k" }, svg('<circle cx="8" cy="8" r="4.5"/>'), "Zero"),
-        h("span", { class: "k roc" }, svg('<path d="M1 1h14v14H1z" stroke="none" fill="currentColor" fill-opacity=".22"/><path d="M2 14L14 2M2 8l6-6M8 14l6-6" stroke-width="1"/>'), "Integral converges")),
-      h("span", { class: "grow" }),
-      h("button", { class: "sd-btn sd-ghost sd-small sd-icon", type: "button", title: "Fit every pole and zero", "aria-label": "Fit every pole and zero", on: { click: () => store.set("win", { ...store.state.model.sWindow }) } }, icon("home")));
-    el.append(box, bar);
-    const cv = fitCanvas(box, draw), { canvas, ctx } = cv;
+    const box = h("div", { class: "plot" }), key = h("span", { class: "key" });
+    el.append(box, h("div", { class: "vbar" }, key, h("span", { class: "grow" }),
+      h("button", { class: "sd-btn sd-ghost sd-small sd-icon", type: "button", title: "Fit every pole and zero", "aria-label": "Fit every pole and zero", on: { click: () => store.set("win", { ...store.state.model.sWindow }) } }, icon("home"))));
+    const cv = fitCanvas(box, draw), { canvas, ctx } = cv, layer = mathLayer(box);
     canvas.tabIndex = 0;
     canvas.setAttribute("role", "application");
     canvas.setAttribute("aria-label", "Pole-zero map. Arrow keys move the probe point s.");
     const frame = () => planeFrame(cv.size.w, cv.size.h, store.state.win);
 
     function draw() {
-      const { model, probe } = store.state, { w, h: hgt } = cv.size;
-      if (!w || !model) return;
-      const pal = palette(), f = frame();
+      const { w, h: hgt } = cv.size;
+      if (!w || !store.state.model) return;
+      const pal = palette();
       ctx.clearRect(0, 0, w, hgt);
-      // where the integral converges: everything right of the rightmost pole
-      const edge = Math.max(0, Math.min(w, f.x(model.roc)));
-      if (edge < w) {
-        ctx.fillStyle = pal.alpha("accent", 0.1);
-        ctx.fillRect(edge, 0, w - edge, hgt);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(edge, 0, w - edge, hgt); ctx.clip();
-        ctx.strokeStyle = pal.alpha("accent", 0.16); ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let d = -hgt; d < w; d += 12) { ctx.moveTo(d, hgt); ctx.lineTo(d + hgt, 0); }
-        ctx.stroke();
-        ctx.restore();
-      }
-      drawPlane(ctx, f, pal);
-      if (edge > 0 && edge < w) {
-        ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
-        ctx.beginPath(); ctx.moveTo(edge, 0); ctx.lineTo(edge, hgt); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.lineCap = "round";
-      const times = (z, m) => { if (m > 1) label(ctx, "×" + m, f.x(z.re) + 9, f.y(z.im) - 9, pal.ink2, pal, { size: 11 }); };
-      for (const z of model.zeros) {
-        ctx.strokeStyle = pal.ink; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(f.x(z.s.re), f.y(z.s.im), 6, 0, 2 * Math.PI); ctx.stroke();
-        times(z.s, z.mult);
-      }
-      for (const p of model.poles) {
-        const x = f.x(p.s.re), y = f.y(p.s.im);
-        ctx.strokeStyle = pal.sheet; ctx.lineWidth = 6;
-        ctx.beginPath(); ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6); ctx.stroke();
-        ctx.strokeStyle = pal.ink; ctx.lineWidth = 2.4;
-        ctx.stroke();
-        times(p.s, p.mult);
-      }
-      // the probe
-      const px = f.x(probe.re), py = f.y(probe.im);
-      ctx.strokeStyle = pal.sheet; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.stroke();
-      ctx.strokeStyle = pal.probe; ctx.lineWidth = 2.5; ctx.stroke();
-      ctx.fillStyle = pal.probe;
-      ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 2 * Math.PI); ctx.fill();
-      const left = px > w - 150;
-      label(ctx, "s = " + fmtComplex(probe), px + (left ? -13 : 13), py - 13, pal.probe, pal, { align: left ? "right" : "left" });
+      layer.begin();
+      paintPz({ ctx, w, h: hgt, pal, math: layer.put }, store.state, { probe: true });
+      layer.end();
+      legendDom(key, pzLegend(), pal);
     }
 
     // ── pointer: grab the probe, or drag the plane, or click to put the probe there ──
@@ -125,6 +136,7 @@ export default {
       else return;
       e.preventDefault();
     });
+
     return { update(state, dirty) { if (dirty.has("model") || dirty.has("probe") || dirty.has("win") || dirty.has("theme")) draw(); } };
   },
 };

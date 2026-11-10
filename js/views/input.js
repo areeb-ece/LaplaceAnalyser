@@ -2,17 +2,18 @@
 // function of time, or a transform. Every keystroke is re-read; what the tool
 // understood is set as maths underneath, and anything it can't do is said in words.
 import { h, clear } from "../ui.js";
-import { typeset } from "../math.js";
+import { tex, m } from "../math.js";
 import { parseEquation } from "../lib/parse.js";
 import { odeFromAst } from "../lib/ode.js";
 import { PRESETS } from "../lib/presets.js";
 
 const MODES = [
-  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", hint: "A linear equation in y, like y'' + 2y' + 5y = cos(2t)." },
-  { id: "function", name: "Function f(t)", field: "fn", label: "Function of time", hint: "Like e^(-t) sin(3t), or t^2 e^(-2t) + 1." },
-  { id: "rational", name: "Transform F(s)", field: "rational", label: "Transform", hint: "A ratio of polynomials in s, like (s + 3)/((s + 1)(s^2 + 4))." },
+  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"]] },
+  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"]] },
+  { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"]] },
 ];
-const yName = (k) => (k <= 3 ? "y" + "'".repeat(k) : `y^(${k})`) + "(0)";
+// y(0), y'(0), … as maths (the labels of the starting-value boxes) and as plain words (for errors).
+const yTex = (k) => (k <= 3 ? "y" + "'".repeat(k) : `y^{(${k})}`) + "(0)";
 
 // How many starting values the equation needs. While it's half-typed and won't parse,
 // count the highest derivative that appears in the text.
@@ -27,7 +28,7 @@ export default {
   id: "input", title: "Input",
   mount(el, store, actions) {
     const seg = h("div", { class: "sd-seg", role: "radiogroup", "aria-label": "What to start from" },
-      MODES.map((m) => h("button", { type: "button", role: "radio", "data-mode": m.id, text: m.name, on: { click: () => actions.setInput({ mode: m.id }) } })));
+      MODES.map((x) => h("button", { type: "button", role: "radio", "data-mode": x.id, on: { click: () => actions.setInput({ mode: x.id }) } }, x.name, x.sym ? [" ", m(x.sym)] : null)));
     const label = h("label", { class: "sd-label", for: "inExpr" });
     const expr = h("input", { class: "sd-input sd-mono", id: "inExpr", type: "text", autocomplete: "off", autocapitalize: "off", spellcheck: false, "aria-describedby": "inHint inError" });
     const hint = h("p", { class: "sd-hint", id: "inHint" });
@@ -46,7 +47,7 @@ export default {
       h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inExamples", text: "Examples" }), h("span", { class: "sd-select sd-small" }, examples))));
 
     let order = 2, timer = 0;
-    const mode = () => MODES.find((m) => m.id === store.state.input.mode);
+    const mode = () => MODES.find((x) => x.id === store.state.input.mode);
     const later = (fn) => { clearTimeout(timer); timer = setTimeout(fn, 180); };
     expr.addEventListener("input", () => later(() => actions.setInput({ [mode().field]: expr.value })));
     expr.addEventListener("keydown", (e) => { if (e.key === "Enter") { clearTimeout(timer); actions.setInput({ [mode().field]: expr.value }); } });
@@ -64,23 +65,24 @@ export default {
           const next = Array.from({ length: order }, (_, i) => icsGrid.querySelector("#inIc" + i)?.value ?? "0");
           actions.setInput({ ics: next });
         }));
-        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k, text: yName(k) }), box));
+        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k }, m(yTex(k))), box));
       }
     }
 
     function draw() {
-      const { input, model, error: message } = store.state, m = mode();
+      const { input, model, error: message } = store.state, md = mode();
       for (const b of seg.children) b.setAttribute("aria-checked", String(b.dataset.mode === input.mode));
-      label.textContent = m.label;
-      hint.textContent = m.hint;
-      if (document.activeElement !== expr) expr.value = input[m.field];
+      label.textContent = md.label;
+      // what to type is shown as typed (in the code face); the maths around it is typeset
+      if (hint.dataset.mode !== md.id) { hint.dataset.mode = md.id; hint.replaceChildren(...md.hint.map((part) => (Array.isArray(part) ? h("code", { text: part[0] }) : part))); }
+      if (document.activeElement !== expr) expr.value = input[md.field];
       expr.setAttribute("aria-invalid", String(!!message));
       ics.hidden = input.mode !== "ode";
       if (input.mode === "ode") drawIcs(input);
       error.hidden = !message;
       error.textContent = message || "";
       readas.hidden = !!message || !model?.typed;
-      if (!message && model?.typed) typeset(math, model.typed);
+      if (!message && model?.typed) tex(math, model.typed, true);
     }
     return { update(state, dirty) { if (dirty.has("input") || dirty.has("model") || dirty.has("error")) draw(); } };
   },

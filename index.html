@@ -25,6 +25,8 @@
 <link rel="stylesheet" href="/design/fonts.css">
 <script src="/design/theme.js"></script>
 <script src="js/theme.js"></script>
+<!-- KaTeX sets every piece of maths on the page; it runs before the app's module does. -->
+<script src="vendor/katex/katex.min.js" defer></script>
 </head>
 <body>
 <button class="skip sd-btn sd-primary" id="skip" type="button">Skip to the workspace</button>
@@ -43,6 +45,7 @@
       <button class="sd-btn sd-small sd-ghost" type="button" id="btnReset" title="Back to the Overview layout, with every panel at its first size">Reset</button>
     </div>
     <button class="sd-btn sd-small" type="button" id="btnViews" title="Open or close a view">Views</button>
+    <button class="sd-btn sd-small" type="button" id="btnImage" title="Save the views as a picture, a GIF or a video" aria-haspopup="dialog"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15.5 9.5h.01"/></svg><span class="lbl">Save image</span></button>
     <button class="sd-btn sd-small sd-ghost" type="button" id="btnHelp" aria-haspopup="dialog">Syntax and keys</button>
     <span class="design-slot" data-design-settings></span>
     <button class="sd-btn sd-small theme" id="btnTheme" type="button" title="Switch between the dark and light sheet" hidden>Light</button>
@@ -59,11 +62,11 @@
       <button type="button" role="radio" data-speed="2" aria-checked="false">2×</button>
     </div>
     <div class="probe" role="group" aria-label="Probe point s">
-      <span aria-hidden="true">s =</span>
+      <span class="m" data-m="s =" aria-hidden="true"></span>
       <input class="sd-input sd-small sd-mono" id="probeRe" type="number" step="0.05" aria-label="Real part of the probe s">
-      <span aria-hidden="true">+</span>
+      <span class="m" data-m="+" aria-hidden="true"></span>
       <input class="sd-input sd-small sd-mono" id="probeIm" type="number" step="0.05" aria-label="Imaginary part of the probe s">
-      <span aria-hidden="true">i</span>
+      <span class="m" data-m="i" aria-hidden="true"></span>
     </div>
   </div>
 

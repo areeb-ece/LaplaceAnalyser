@@ -7,9 +7,11 @@
 // The frame is redrawn only when something changed.
 import { h } from "../ui.js";
 import { palette } from "../palette.js";
-import { niceStep, tickText } from "../plot2d.js";
+import { mathLayer, m } from "../math.js";
+import { legendDom } from "../legend.js";
+import { niceStep } from "../plot2d.js";
 import { evalTransformAt } from "../lib/analyse.js";
-import { fmtComplex } from "../lib/tex.js";
+import { texComplex } from "../lib/tex.js";
 
 const N = 320;        // grid cells along each side
 const HEIGHT = 0.95;  // world height of the limit (the plane is the square [-1, 1]²)
@@ -74,26 +76,30 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
+/** What the colour means. */
+export const surfaceLegend = () => [{ mark: "phase", role: "ink", text: "Phase,", tex: "-\\pi \\text{ to } \\pi" }];
+
 export default {
-  id: "surface", title: "S-plane surface",
+  id: "surface", title: "S-plane surface", legend: surfaceLegend,
   mount(el, store) {
-    const box = h("div", { class: "plot" }), labels = h("div", { class: "labels", "aria-hidden": "true" });
+    const box = h("div", { class: "plot" });
     const canvas = h("canvas", { tabindex: 0, role: "application", "aria-label": "Surface of the transform over the s-plane. Arrow keys move the probe point s; Alt with the arrow keys turns the view." });
-    box.append(canvas, labels);
+    box.append(canvas);
+    const layer = mathLayer(box);
     const check = (text, key) => {
       const input = h("input", { type: "checkbox", checked: store.state.opts[key] });
       input.addEventListener("change", () => store.patch("opts", { [key]: input.checked }));
-      return h("label", { class: "sd-check" }, input, text);
+      return h("label", { class: "sd-check" }, input, ...[].concat(text));
     };
     const limit = h("input", { class: "sd-range", type: "range", min: 0, max: 1, step: 0.01, value: store.state.opts.clamp, "aria-label": "Height limit" });
     limit.addEventListener("input", () => store.patch("opts", { clamp: Number(limit.value) }));
-    const keyCanvas = h("canvas", { class: "phasekey", width: 96, height: 10 });
+    const key = h("span", { class: "key", title: "The colour is the phase (argument) of the transform" });
     const bar = h("div", { class: "vbar" },
       h("label", { class: "pair", title: "Spikes are cut off above this height" }, "Height limit", limit),
       check("Log height", "log"),
-      check("e^(st) samples", "samples"),
+      check([m("e^{st}"), " samples"], "samples"),
       h("span", { class: "grow" }),
-      h("span", { class: "pair", title: "The colour is the phase (argument) of the transform" }, "Phase −π", keyCanvas, "π"),
+      key,
       h("button", { class: "sd-btn sd-ghost sd-small", type: "button", text: "Reset view", on: { click: () => { cam = { ...HOME }; store.set("win", { ...store.state.model.sWindow }); draw(); } } }));
     el.append(box, bar);
 
@@ -198,9 +204,9 @@ export default {
 
     // ── bringing the scene up to date with the state ──
     let sampled = null;
-    function draw() {
+    function draw(pal = palette()) {
       if (!R?.mesh) return;
-      const { model, win, opts } = store.state, u = R.uniforms, pal = palette();
+      const { model, win, opts } = store.state, u = R.uniforms;
       const top = topOf();
       u.uWin.value.set(win.cx, win.cy, win.half);
       model.poles.slice(0, MAX).forEach((p, i) => u.uPoles.value[i].set(p.s.re, p.s.im, p.mult));
@@ -228,7 +234,7 @@ export default {
         R.samples.geometry = new T.BufferGeometry().setFromPoints(samplePoints(u.uStep.value));
       }
       limit.value = String(opts.clamp);
-      drawKey(u.uSat.value, u.uLight.value);
+      if (pal.theme === "current") legendDom(key, surfaceLegend(), pal);
       placeProbe();
       need();
     }
@@ -256,13 +262,6 @@ export default {
       }
       return pts;
     }
-    let keyDrawn = "";
-    function drawKey(sat, light) {
-      if (keyDrawn === sat + "," + light) return;
-      keyDrawn = sat + "," + light;
-      const c = keyCanvas.getContext("2d");
-      for (let x = 0; x < 96; x++) { c.fillStyle = `hsl(${(((x / 95 - 0.5) * 360) + 360) % 360} ${sat * 100}% ${light * 100}%)`; c.fillRect(x, 0, 1, 10); }
-    }
     function placeProbe() {
       if (!R?.probe) return;
       const { probe } = store.state, y = heightAt(probe), base = toWorld(probe, 0);
@@ -273,48 +272,74 @@ export default {
     }
 
     // ── drawing a frame ──
-    function render() {
-      stale = false;
-      if (!R?.mesh || !size.w) return;
-      // a narrow panel stands further back, so the whole plane stays in the picture
-      const target = new T.Vector3(0, 0.3, 0), d = cam.dist * Math.min(2.2, Math.max(0.8, (1.42 * size.h) / size.w));
+    function aim(dims) {
+      // a narrow picture stands further back, so the whole plane stays in it
+      const target = new T.Vector3(0, 0.3, 0), d = cam.dist * Math.min(2.2, Math.max(0.8, (1.42 * dims.h) / dims.w));
       R.camera.position.set(target.x + d * Math.sin(cam.pol) * Math.sin(cam.az), target.y + d * Math.cos(cam.pol), target.z + d * Math.sin(cam.pol) * Math.cos(cam.az));
       R.camera.lookAt(target);
       R.camera.updateMatrixWorld();
-      R.renderer.render(R.scene, R.camera);
-      placeLabels();
     }
-    const screen = (v) => { const p = v.clone().project(R.camera); return { x: (p.x * 0.5 + 0.5) * size.w, y: (-p.y * 0.5 + 0.5) * size.h, front: p.z < 1 }; };
-    // The numbers along the two axes and the probe's label are ordinary text, placed
-    // over the canvas where their points land.
-    function placeLabels() {
-      const { win, probe, model } = store.state, step = R.uniforms.uStep.value, want = [];
-      // an axis number is left out on a spike, off the canvas, or where it would sit on another
-      const add = (s, text, cls, dy) => {
+    function render() {
+      stale = false;
+      if (!R?.mesh || !size.w) return;
+      aim(size);
+      R.renderer.render(R.scene, R.camera);
+      layer.begin();
+      labelsFor(layer.put, size, palette(), true);
+      layer.end();
+    }
+    const screenIn = (dims) => (v) => { const p = v.clone().project(R.camera); return { x: (p.x * 0.5 + 0.5) * dims.w, y: (-p.y * 0.5 + 0.5) * dims.h, front: p.z < 1 }; };
+    const screen = (v) => screenIn(size)(v);
+    // The numbers along the two axes and the probe's labels are typeset maths, placed
+    // over the picture where their points land (put is a maths layer's or collector's).
+    function labelsFor(put, dims, pal, withProbe) {
+      const { win, probe, model } = store.state, step = R.uniforms.uStep.value, at = screenIn(dims), taken = [];
+      // an axis number is left out on a spike, off the picture, or where it would sit on another
+      const add = (s, src) => {
         const y = heightAt(s);
         if (y > HEIGHT * 0.5) return;
-        const p = screen(toWorld(s, y + 0.01));
-        if (!p.front || p.x < 8 || p.x > size.w - 8 || p.y < 8 || p.y > size.h - 16) return;
-        if (want.some((o) => Math.abs(o.x - p.x) < 22 && Math.abs(o.y - p.y - dy) < 12)) return;
-        want.push({ ...p, y: p.y + dy, text, cls });
+        const p = at(toWorld(s, y + 0.01));
+        if (!p.front || p.x < 8 || p.x > dims.w - 8 || p.y < 8 || p.y > dims.h - 20) return;
+        if (taken.some((o) => Math.abs(o.x - p.x) < 24 && Math.abs(o.y - p.y) < 14)) return;
+        taken.push(p);
+        put(src, p.x, p.y + 12, { align: "center", color: pal.ink, size: 11, shade: true });
       };
       const tidy = (v) => Number((Math.round(v / step) * step).toPrecision(10));
       const reAxis = Math.min(Math.max(0, win.cy - win.half), win.cy + win.half), imAxis = Math.min(Math.max(0, win.cx - win.half), win.cx + win.half);
-      for (let v = Math.ceil((win.cx - win.half) / step) * step; v <= win.cx + win.half + 1e-9; v += step) { const t = tidy(v); if (t !== 0) add({ re: t, im: reAxis }, tickText(t), "tick", 12); }
-      for (let v = Math.ceil((win.cy - win.half) / step) * step; v <= win.cy + win.half + 1e-9; v += step) { const t = tidy(v); if (t !== 0) add({ re: imAxis, im: t }, (t === 1 ? "" : t === -1 ? "−" : tickText(t)) + "i", "tick", 12); }
-      const foot = screen(toWorld(probe, 0)), tip = screen(toWorld(probe));
-      if (foot.front) want.push({ x: foot.x + 12, y: foot.y + 4, text: "s = " + fmtComplex(probe), cls: "probe" });
+      for (let v = Math.ceil((win.cx - win.half) / step) * step; v <= win.cx + win.half + 1e-9; v += step) { const t = tidy(v); if (t !== 0) add({ re: t, im: reAxis }, String(t)); }
+      for (let v = Math.ceil((win.cy - win.half) / step) * step; v <= win.cy + win.half + 1e-9; v += step) { const t = tidy(v); if (t !== 0) add({ re: imAxis, im: t }, (t === 1 ? "" : t === -1 ? "-" : String(t)) + "i"); }
+      if (!withProbe) return;
+      const foot = at(toWorld(probe, 0)), tip = at(toWorld(probe));
+      if (foot.front) put("s = " + texComplex(probe), foot.x + 14, foot.y + 12, { color: pal.probe, chip: true });
       const F = evalTransformAt(model, probe);
-      if (tip.front && Number.isFinite(F.re) && Math.hypot(F.re, F.im) < 1e6) want.push({ x: tip.x + 12, y: tip.y - 6, text: `${model.cap}(s) = ${fmtComplex(F)}`, cls: "value" });
-      while (labels.children.length < want.length) labels.append(h("span"));
-      [...labels.children].forEach((span, i) => {
-        const l = want[i];
-        span.hidden = !l;
-        if (!l) return;
-        if (span.textContent !== l.text) span.textContent = l.text;
-        span.className = l.cls;
-        span.style.setProperty("transform", `translate(${l.x.toFixed(1)}px, ${l.y.toFixed(1)}px)${l.cls === "tick" ? " translate(-50%, -50%)" : ""}`);
-      });
+      if (tip.front && Number.isFinite(F.re) && Math.hypot(F.re, F.im) < 1e6) put(`${model.cap}(s) = ${texComplex(F)}`, tip.x + 14, tip.y - 8, { color: pal.value, chip: true });
+    }
+
+    /**
+     * The surface drawn into another canvas, for a saved image: w × h (in the image's own
+     * units) at (x, y) of ctx, at `scale` pixels per unit, in the colours of pal, with or
+     * without the probe. The labels go to put. The view on the page is put back after.
+     */
+    function renderTo(ctx, x, y, w, hgt, { pal, probe, scale, put }) {
+      if (!R?.mesh) return false;
+      const dims = { w, h: hgt }, ratio = R.renderer.getPixelRatio();
+      R.renderer.setPixelRatio(Math.min(scale, 4096 / Math.max(w, hgt)));
+      R.renderer.setSize(w, hgt, false);
+      R.camera.aspect = w / hgt;
+      R.camera.updateProjectionMatrix();
+      draw(pal);
+      R.probe.visible = probe;
+      aim(dims);
+      R.renderer.render(R.scene, R.camera);
+      ctx.drawImage(canvas, x, y, w, hgt); // straight after the render, while the frame is still there
+      labelsFor((src, lx, ly, o) => put(src, x + lx, y + ly, o), dims, pal, probe);
+      // back to how the page had it
+      R.probe.visible = true;
+      R.renderer.setPixelRatio(ratio);
+      if (size.w) { R.renderer.setSize(size.w, size.h, false); R.camera.aspect = size.w / size.h; R.camera.updateProjectionMatrix(); }
+      draw();
+      render();
+      return true;
     }
 
     // ── pointer: grab the probe, click to place it, drag to turn, Shift-drag to slide the plane ──
@@ -410,8 +435,9 @@ export default {
       e.preventDefault();
     });
 
-    init();
+    const ready = init().then(() => !!R?.mesh);
     return {
+      ready, renderTo,
       update(state, dirty) {
         if (dirty.has("model") || dirty.has("win") || dirty.has("opts") || dirty.has("theme")) draw();
         else if (dirty.has("probe")) placeProbe();

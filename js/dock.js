@@ -281,6 +281,8 @@ export function createDock(host, { titles, elFor, onShow, onChange }) {
       commit();
       return true;
     },
+    /** A view's element, made (and the view mounted) if it hasn't been yet. */
+    elFor,
     isOpen: (id) => openViews().includes(id),
     isShown: (id) => shown.has(id),
     open(id) {
