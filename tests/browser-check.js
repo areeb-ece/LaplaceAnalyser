@@ -29,6 +29,7 @@ const browser = await chromium.launch({
 });
 fs.mkdirSync(SHOTS, { recursive: true });
 
+const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 async function open(viewport, init) {
   const context = await browser.newContext({ viewport });
   if (init) await context.addInitScript(init);
@@ -47,6 +48,7 @@ async function open(viewport, init) {
   // Hold the sky still. Its drift repaints the whole page every frame, which a software
   // renderer can't keep up with once a WebGL canvas is on it; nothing checked here moves.
   if (design) await page.evaluate(() => window.SiteDesign?.set({ motion: false }));
+  await frame(page); // views fill themselves in on the first frame after they're shown
   const clean = async (what) => {
     assert.deepEqual(errors, [], `${what}: script errors`);
     assert.deepEqual(await page.evaluate(() => window.__csp), [], `${what}: CSP violations`);
@@ -56,7 +58,6 @@ async function open(viewport, init) {
   };
   return { page, context, clean };
 }
-const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name + ".png"), timeout: 120000 });
 const figures = (page, view) => page.locator(`.view[data-view="${view}"] .figures`).innerText();
 const complex = (text) => { const m = /(−?[\d.]+) ([+−]) ([\d.]+)i/.exec(text); return [Number(m[1].replace("−", "-")), (m[2] === "−" ? -1 : 1) * Number(m[3])]; };
@@ -177,10 +178,12 @@ try {
     await page.waitForTimeout(250);
     assert.equal(await page.getAttribute("#btnPlay", "aria-pressed"), "true");
     await page.click("#btnPlay");
+    await frame(page);
     assert.ok(Number((await page.locator("#timeOut").innerText()).match(/[\d.]+/)[0]) > 3.1, "time advanced while playing");
 
     // ── input: equations, examples, refusals ──
     await page.click('[data-layout="ode"]');
+    await frame(page);
     assert.equal(await page.getAttribute('[data-mode="ode"]', "aria-checked"), "true");
     await page.selectOption("#inExamples", "resonance");
     await frame(page);
@@ -241,6 +244,7 @@ try {
     const sizes = await page.evaluate(() => localStorage.getItem("laplaceanalyser.layout"));
     await page.reload();
     await page.waitForSelector(".dk-stack");
+    await frame(page);
     assert.deepEqual(await openViews(page), layout, "the layout survives a reload");
     assert.equal(await page.evaluate(() => localStorage.getItem("laplaceanalyser.layout")), sizes);
     assert.equal(await page.inputValue("#inExpr"), "1/(s^2 + 2s + 5)", "and so does the last input");
@@ -329,6 +333,7 @@ try {
     const page = await context.newPage();
     await page.goto(base);
     await page.waitForSelector(".dk-stack");
+    await frame(page);
     const t0 = await page.locator("#timeOut").innerText();
     await page.waitForTimeout(400);
     assert.equal(await page.locator("#timeOut").innerText(), t0);
