@@ -1,9 +1,8 @@
-# Laplace Visualizer: plan
+# Laplace Analyser: plan
 
-Status: **waiting for approval.** Nothing but this file exists yet.
-
-Section 2 lists the five decisions that are expensive to reverse. Approving the plan
-approves the recommended option for each unless you say otherwise.
+Status: **approved and built.** All seven milestones are done. The recommended option
+was approved for decisions D1 to D4; for D5 the name is Laplace Analyser, with the
+wordmark `LAPLACE/ANALYSER`. Section 14 lists what changed while building.
 
 ---
 
@@ -114,11 +113,10 @@ work to match the family).
 - Denominator degree is capped at 12 (ODE order up to 6, comfortably above the required 4).
 - Delayed steps $u(t-a)$ stay a stretch goal, attempted after milestone f.
 
-### D5. Name and address
+### D5. Name and address (decided: Laplace Analyser)
 
-The repo is `LaplaceAnalyser` but the brief calls the app "Laplace Visualizer". Plan:
-title "Laplace Visualizer", wordmark `LAPLACE/VISUALIZER`, served at
-`/LaplaceAnalyser/`, storage keys `laplacevisualizer.*`. Say if you want the names to match.
+Title "Laplace Analyser", wordmark `LAPLACE/ANALYSER`, served at `/LaplaceAnalyser/`,
+storage keys `laplaceanalyser.*`.
 
 ---
 
@@ -326,3 +324,24 @@ One role, one token, in every view:
 - Portfolio: add `laplaceanalyser` to `reservedSlugs`, add a tool notes page, and
   update the "five sites" comments in `public/design/`.
 - GitHub: turn on Pages for this repo (`main`, root) once the branch is merged.
+
+## 14. What changed while building
+
+- **Eight panels, not seven.** The worked steps are their own panel instead of living
+  inside the input panel, so they can sit beside the plots or be closed.
+- **One transport for time, in a strip under the bar.** Play, pause, speed and the
+  time slider drive every view, so they sit outside any one panel (a layout without the
+  time plot still needs them). The time plot keeps the draggable cursor.
+- **The probe can be typed.** Its real and imaginary parts are number fields in the same
+  strip: the exact way to place it, and a keyboard route.
+- **The time cursor starts at the end of the window**, so every view opens complete
+  rather than empty. Play restarts from zero.
+- **Typed transforms keep their factors.** `(s + 1)^3` stays a triple root instead of
+  being multiplied out and found again numerically.
+- **A self-check before anything is shown.** The partial fractions must add back up to
+  the fraction they came from; if they don't (poles too close to separate accurately),
+  the input is refused.
+- **Three.js 0.183.0**, the newest release that ships a minified module build.
+- **Not done: delayed steps** `u(t - a)`, the stretch goal. They are refused with a
+  message. The surface shader assumes a ratio of polynomials, which a delay isn't.
+- **No worker was needed.** The surface's heights are computed on the GPU.
