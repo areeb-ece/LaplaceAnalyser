@@ -41,8 +41,12 @@ async function open(viewport, init) {
     window.__csp = [];
     document.addEventListener("securitypolicyviolation", (e) => window.__csp.push(e.violatedDirective + " " + e.blockedURI));
   });
+  page.setDefaultTimeout(90000); // a machine with no GPU draws WebGL in software, slowly
   await page.goto(base);
   await page.waitForSelector(".dk-stack");
+  // Hold the sky still. Its drift repaints the whole page every frame, which a software
+  // renderer can't keep up with once a WebGL canvas is on it; nothing checked here moves.
+  if (design) await page.evaluate(() => window.SiteDesign?.set({ motion: false }));
   const clean = async (what) => {
     assert.deepEqual(errors, [], `${what}: script errors`);
     assert.deepEqual(await page.evaluate(() => window.__csp), [], `${what}: CSP violations`);
@@ -53,7 +57,7 @@ async function open(viewport, init) {
   return { page, context, clean };
 }
 const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name + ".png") });
+const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name + ".png"), timeout: 120000 });
 const figures = (page, view) => page.locator(`.view[data-view="${view}"] .figures`).innerText();
 const complex = (text) => { const m = /(−?[\d.]+) ([+−]) ([\d.]+)i/.exec(text); return [Number(m[1].replace("−", "-")), (m[2] === "−" ? -1 : 1) * Number(m[3])]; };
 const openViews = (page) => page.$$eval(".dk-stack", (els) => els.map((e) => e.dataset.view));
@@ -86,7 +90,7 @@ try {
     await page.waitForFunction(() => document.querySelector('.view[data-view="surface"] .labels .probe'), null, { timeout: 15000 });
     await frame(page);
     await shot(page, "laptop-overview");
-    const png = await page.locator('.view[data-view="surface"] canvas').first().screenshot();
+    const png = await page.locator('.view[data-view="surface"] canvas').first().screenshot({ timeout: 120000 });
     assert.ok(png.length > 20000, `the surface is drawn (${png.length} bytes of picture)`);
 
     // The transform of cos(t) is s/(s² + 1): poles at ±i.
@@ -291,7 +295,7 @@ try {
     assert.equal(await page.getAttribute("#dock", "data-mode"), "stacked");
     const heights = await page.$$eval(".dk-body", (els) => els.map((e) => e.clientHeight));
     assert.ok(heights.every((v) => v > 100), `every view has room: ${heights}`);
-    await page.screenshot({ path: path.join(SHOTS, "phone.png"), fullPage: true });
+    await page.screenshot({ path: path.join(SHOTS, "phone.png"), fullPage: true, timeout: 120000 });
     await clean("phone");
     await page.context().close();
   }
