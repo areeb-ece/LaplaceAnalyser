@@ -68,7 +68,7 @@ const openViews = (page) => page.$$eval(".dk-stack", (els) => els.map((e) => e.d
 const setTime = (page, t) => page.evaluate((v) => { const r = document.getElementById("timeRange"); r.value = String(v); r.dispatchEvent(new Event("input")); }, t);
 // The maths boxes are typed into key by key, as a person would; what a box holds is
 // kept as text beside it (for screen readers), which is what gets read back here.
-const typeInto = async (page, id, text) => { await page.focus(id); await page.keyboard.press("Control+a"); await page.keyboard.press("Backspace"); await page.keyboard.type(text); };
+const typeInto = async (page, id, text) => { await frame(page); await page.focus(id); await page.keyboard.press("Control+a"); await page.keyboard.press("Backspace"); await page.keyboard.type(text); };
 const typeExpr = async (page, text) => { await typeInto(page, "#inExpr", text); await page.keyboard.press("Enter"); await frame(page); };
 const exprText = (page) => page.textContent("#inExprText");
 const typeExprIn = async (page, mode, text) => { if (await page.locator('[data-key="tab:input"]').count()) await page.click('[data-key="tab:input"]'); await page.click(`[data-mode="${mode}"]`); await typeExpr(page, text); };
@@ -265,10 +265,21 @@ try {
     await keys("s^3");
     assert.equal(await exprText(page), "(s^2 + 1)/(s^3)", "a selection becomes the numerator");
     // a click puts the cursor where it lands: in the numerator, after the s
-    const s0 = await page.locator(`${box} .mf-frac > .mf-row`).first().locator(".mf-var").boundingBox();
-    await page.mouse.click(s0.x + s0.width - 1, s0.y + s0.height / 2);
+    // (the box redraws when its height changes, so let that happen, then read the place in one go)
+    await frame(page);
+    const s0 = await page.$eval(`${box} .mf-frac > .mf-row .mf-var`, (el) => { const r = el.getBoundingClientRect(); return { x: r.right - 1, y: (r.top + r.bottom) / 2 }; });
+    await page.mouse.click(s0.x, s0.y);
     await keys("t");
     assert.equal(await exprText(page), "(st^2 + 1)/(s^3)");
+    // keys that follow a change of mode in the same instant land in the new mode's text
+    await page.click('[data-mode="function"]');
+    await page.focus("#inExpr");
+    await page.keyboard.type(" +1");
+    await page.keyboard.press("Enter");
+    await frame(page);
+    assert.match(await exprText(page), / \+ 1$/, "typed straight after switching mode");
+    assert.ok(await page.isHidden("#inError"));
+    await page.click('[data-mode="rational"]');
     // pasted text is read whole, the way the parser reads it
     await page.focus("#inExpr");
     await page.keyboard.press("Control+a");
