@@ -47,8 +47,9 @@ Turn on GitHub Pages for the repository (Settings → Pages → deploy from the 
 branch, root folder). It is served at `/LaplaceAnalyser/`, next to the portfolio. There
 is nothing to build: the files in the repository are the site.
 
-The portfolio should reserve the path (add `laplaceanalyser` to `reservedSlugs` in its
-`site.config.yaml`) so no page of its own can take it.
+The portfolio reserves the path (`laplaceanalyser` in `reservedSlugs` in its
+`site.config.yaml`) so no page of its own can take it, and describes the tool at
+[`/tools/laplaceanalyser-notes/`](https://areeb-ece.github.io/tools/laplaceanalyser-notes/).
 
 ## Using it
 
