@@ -47,8 +47,9 @@ Turn on GitHub Pages for the repository (Settings → Pages → deploy from the 
 branch, root folder). It is served at `/LaplaceAnalyser/`, next to the portfolio. There
 is nothing to build: the files in the repository are the site.
 
-The portfolio should reserve the path (add `laplaceanalyser` to `reservedSlugs` in its
-`site.config.yaml`) so no page of its own can take it.
+The portfolio reserves the path (`laplaceanalyser` in `reservedSlugs` in its
+`site.config.yaml`) so no page of its own can take it, and describes the tool at
+[`/tools/laplaceanalyser-notes/`](https://areeb-ece.github.io/tools/laplaceanalyser-notes/).
 
 ## Using it
 
@@ -77,22 +78,37 @@ what it models:
 | Economics | present value of a growing income, a business cycle |
 | Aerospace | aircraft pitch (short period and phugoid), roll rate |
 
-### Syntax
+### Typing maths
+
+The boxes typeset what you type as you type it, the way Desmos does:
+
+| Key | Does |
+| --- | --- |
+| `/` | Starts a fraction. What stands just before it goes on top; select more first to put all of it there. |
+| `^` | Starts a power. Everything typed next is raised, until you step out. |
+| `Space`, `→` | Steps out of a power or a fraction. `↑` and `↓` go between the top and the bottom of a fraction. |
+| `(` | Brings its closing bracket with it, in grey until you type it. Brackets grow with what they hold. |
+| `Backspace` | At the start of a fraction or a power, takes it apart again. |
+| `Ctrl+Z`, `Ctrl+Shift+Z` | Undo and redo. |
+
+The keys under the box type the same things, for phones and for finding them. A line
+typed the old way, with its usual spaces, still comes out right: `e^(-t) sin(3t)`,
+`t^2 e^(-2t) + 1` and `(s + 3)/((s + 1)(s^2 + 4))` can be typed exactly as written
+here. Copy and paste work on plain text in this syntax:
 
 | Type | Meaning |
 | --- | --- |
 | `2t`, `3 sin(t)`, `(s+1)(s+2)` | Things side by side are multiplied. `*` works too. |
 | `t^2`, `(s+1)^3` | Whole-number powers. |
-| `e^(-2t)`, `exp(-2t)`, `2^t` | Exponentials. Put the power in brackets. |
+| `e^(-2t)`, `exp(-2t)`, `2^t` | Exponentials. The closing bracket ends the power. |
 | `sin(3t)`, `cos(2t + pi/4)`, `sinh(t)`, `cosh(t)` | The argument must be of the form `a·t + b`. |
 | `u(t)`, `step(t)` | The unit step. Every function starts at `t = 0` anyway. |
 | `y'`, `y''`, `y^(4)`, `dy/dt`, `d^2y/dt^2` | Derivatives of `y`, in an equation. |
-| `1/2`, `pi`, `e`, `sqrt(2)` | Numbers, anywhere a number is wanted, including starting values. |
+| `1/2`, `pi`, `e`, `sqrt(2)`, `1e-6` | Numbers, anywhere a number is wanted, including starting values. |
 
-Two spellings are refused instead of guessed, because each has two readings:
-
-- `e^-2t`: write `e^(-2t)` or `e^(-2)*t`.
-- `1/2t` and `1/s(s+1)`: write `1/(2t)` or `(1/2)*t`.
+Because a power and a fraction show where they end, typing never leaves two readings.
+Pasted text can: `e^-2t` and `1/2t` are kept as typed and asked about (write
+`e^(-2t)` or `e^(-2)*t`; `1/(2t)` or `(1/2)*t`), not guessed.
 
 ### What isn't supported
 
@@ -113,7 +129,7 @@ convergence is to the right of its rightmost pole.
 
 | View | Shows |
 | --- | --- |
-| Input | The three modes, starting values, examples, and how the input was read. |
+| Input | The three modes, the maths boxes, starting values and examples. |
 | Worked steps | The transformed equation, $Y(s)$, its partial fractions and $y(t)$. |
 | Time domain | $f(t)$ or $y(t)$, with the time cursor. Click or drag to move it. |
 | S-plane surface | Height is $\lvert F(s)\rvert$, hue is $\arg F(s)$. Poles are spikes, cut at the height limit. |
@@ -218,6 +234,7 @@ js/dock.js              the docking workspace: split tree, tabs, drag and drop, 
 js/palette.js           plot colours resolved from a theme, for canvas and WebGL
 js/plot2d.js            shared 2D drawing: complex-plane axes, ticks, arrows
 js/math.js              KaTeX three ways: in the page, over a canvas, painted onto a canvas
+js/mathfield.js         the maths box: draws lib/field.js's tree, turns keys and clicks into edits
 js/legend.js            a plot's key, drawn under it on the page and in saved pictures
 js/probe.js             the numerical integral at the probe, shared by two views
 js/ui.js                DOM helpers, icons, the menu, safe storage
@@ -228,6 +245,7 @@ js/lib/                 the math engine (pure: no DOM, runs in Node)
   complex.js poly.js      complex numbers and polynomials
   roots.js                roots and their multiplicities
   parse.js                text → syntax tree
+  field.js                the maths box's tree, every edit to it, and tree ↔ text
   expoly.js               signals as sums of c·t^n·e^(λt)
   rational.js             a typed F(s), keeping its factors
   laplace.js              transform, partial fractions, inverse

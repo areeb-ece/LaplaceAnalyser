@@ -23,6 +23,10 @@ has the architecture and the commands; `PLAN.md` has the reasoning behind the de
   at any size. Labels go to `g.math`; keys are described by `legend`.
 - **Maths that isn't being typed is typeset** (`js/math.js`), never written out as
   text. What the user should type stays in the code face.
+- **Maths that is being typed goes through the maths box** (`js/mathfield.js`, model in
+  `js/lib/field.js`). It stores the text syntax `parse.js` reads, and what it shows must
+  be what that text means: a change to the parser's names or precedence is a change to
+  `field.js` too (`tests/field.test.js` runs every example through both).
 - **Never show a silently wrong result.** Input the engine can't handle is refused with
   an `InputError` whose message says what's wrong and what to type instead. Anything
   ambiguous (`e^-2t`, `1/2t`) is asked about, not guessed.

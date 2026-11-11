@@ -159,12 +159,48 @@ code { font-family: var(--font-mono); }
 .form .sd-seg { display: flex; }
 .form .sd-seg button { flex: 1 1 0; height: auto; min-height: calc(var(--ctl-h) - 6px); padding: var(--sp-1) var(--sp-2); white-space: normal; line-height: 1.2; }
 .form .ics { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: var(--sp-3); }
+.form .ics .sd-field { grid-template-rows: auto 1fr; }
 .form .ics .sd-label { font-weight: var(--fw-text); color: var(--ink-2); }
 .form .about { text-wrap: pretty; }
 .form .about b { color: var(--ink-2); font-weight: var(--fw-strong); }
-.form .sd-hint code { font-size: .95em; color: var(--ink-2); }
-.readas { display: grid; gap: var(--sp-1); min-width: 0; color: var(--ink-3); font-size: var(--fs-1); }
-.readas .math { overflow-x: auto; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: var(--well); color: var(--ink); font-size: var(--fs-3); }
+.form .sd-hint code { font-size: .95em; color: var(--ink-2); white-space: nowrap; }
+/* ── the maths box: typeset as it is typed (js/mathfield.js) ──
+   Set in KaTeX's fonts so it matches the maths everywhere else; the em sizes below are
+   KaTeX's own (script size .7, a power raised .363 of the base size). */
+.mf { position: relative; display: flex; align-items: center; min-height: calc(var(--ctl-h-lg) + var(--sp-3)); padding: var(--sp-1) var(--sp-3); border: 1px solid var(--field-line); border-radius: var(--r-sm); background: var(--field); color: var(--ink); font-size: var(--fs-3); cursor: text; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; touch-action: pan-x pan-y; transition: border-color var(--dur-1); }
+.mf[data-focus] { outline: var(--ring-w) solid var(--ring); outline-offset: 1px; border-color: var(--ring); }
+.mf[data-invalid]:not([data-focus]) { border-color: var(--danger); }
+.mf-compact { min-height: var(--ctl-h); padding: 0 var(--sp-2); font-size: var(--fs-2); }
+@media (hover: hover) { .mf:hover:not([data-focus], [data-invalid]) { border-color: var(--ink-2); } }
+/* where the keys go: on the cursor, unseen */
+.mf-in { position: absolute; left: 0; top: 0; width: 1px; height: 1em; margin: 0; padding: 0; border: 0; outline: 0; opacity: 0; resize: none; overflow: hidden; pointer-events: none; font-size: max(16px, 1em); }
+.mf-body { flex: none; margin-inline-end: var(--sp-2); font: 1.21em/1.2 KaTeX_Main, "Times New Roman", serif; white-space: nowrap; user-select: none; -webkit-user-select: none; }
+.mf-row { display: inline-block; }
+.mf-row > span { display: inline-block; }
+.mf-empty { min-width: .6em; height: 1em; vertical-align: -.15em; border: 1px dashed var(--ink-3); border-radius: 2px; }
+.mf-var { font-family: KaTeX_Math, KaTeX_Main, serif; font-style: italic; }
+.mf-bin { margin: 0 .2222em; }
+.mf-rel { margin: 0 .2778em; }
+.mf-gap { margin-left: .1667em; }
+.mf-prime, .mf-raised, .mf-sup { font-size: .7em; vertical-align: .5186em; }
+.mf-ghost { color: var(--ink-3); }
+.mf-open, .mf-close { transform-origin: center; }
+/* a fraction: the bar sits on the line the minus sign is on (set exactly by the script) */
+.mf-frac { vertical-align: -.79em; margin: 0 .12em; font-size: .9em; text-align: center; }
+.mf-frac > .mf-row { display: block; padding: 0 .12em; }
+.mf-row > .mf-base { width: 0; height: 0; }
+.mf-frac > .mf-row + .mf-row { padding-top: .08em; border-top: 1px solid currentColor; }
+.mf-frac > .mf-empty { min-width: .7em; margin: .1em 0; border-top-style: dashed; }
+.mf-frac .mf-frac { font-size: 1em; }
+.mf-sqrt > .mf-row { margin-top: .08em; padding: .04em .1em 0 .05em; border-top: 1px solid currentColor; }
+.mf-surd { transform-origin: bottom; }
+.mf-sel { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+.mf-caret { width: 0; height: 1.15em; margin: 0 -1px; border-left: 2px solid var(--accent); vertical-align: -.22em; animation: mf-blink calc(var(--dur-3) * 4) steps(1) infinite; }
+.mf-row > .mf-caret { display: inline-block; }
+@keyframes mf-blink { 50% { opacity: 0; } }
+.mf-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(2rem, 1fr)); gap: var(--sp-1); }
+.mf-keys .sd-btn { padding: 0; font-size: var(--fs-2); }
+.form .how { display: block; }
 
 /* ── worked steps ── */
 .steps { overflow: auto; overscroll-behavior: contain; margin: 0; padding: var(--sp-4); list-style: none; display: grid; align-content: start; gap: var(--sp-4); counter-reset: step; }

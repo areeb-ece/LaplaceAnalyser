@@ -10,8 +10,8 @@ export class InputError extends Error {
   constructor(message) { super(message); this.name = "InputError"; }
 }
 
-const WORDS = ["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "pi", "t", "s", "y", "u", "e"];
-const FUNCS = new Set(["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
+export const WORDS = ["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "pi", "t", "s", "y", "u", "e"];
+export const FUNCS = new Set(["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
 const SUPER = { "²": "^2", "³": "^3", "⁴": "^4" };
 
 function clean(src) {
@@ -46,6 +46,7 @@ function tokenize(src) {
       i += word.length;
       continue;
     }
+    if (ch === "□") throw new InputError("One of the boxes is still empty. Type something in it, or remove it with Backspace.");
     if ("+-*/^()='".includes(ch)) { out.push({ type: ch, text: ch, space }); i++; continue; }
     throw new InputError(`I can't read the character "${ch}".`);
   }
