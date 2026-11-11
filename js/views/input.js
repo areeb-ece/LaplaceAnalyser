@@ -39,19 +39,24 @@ export default {
   id: "input", title: "Input",
   mount(el, store, actions) {
     const seg = h("div", { class: "sd-seg", role: "radiogroup", "aria-label": "What to start from" },
-      MODES.map((x) => h("button", { type: "button", role: "radio", "data-mode": x.id, on: { click: () => actions.setInput({ mode: x.id }) } }, x.name, x.sym ? [" ", m(x.sym)] : null)));
+      MODES.map((x) => h("button", { type: "button", role: "radio", "data-mode": x.id, on: { click: () => switchTo({ mode: x.id }) } }, x.name, x.sym ? [" ", m(x.sym)] : null)));
     const label = h("label", { class: "sd-label", for: "inExpr" });
-    let order = 2, timer = 0, synced = null, boxes = [];
+    let order = 2, timer = 0, waiting = false, synced = null, boxes = [];
     const mode = () => MODES.find((x) => x.id === store.state.input.mode);
     // what the boxes hold goes to the store a moment after the last key, or at once on Enter
     const send = () => {
       clearTimeout(timer);
+      waiting = false;
       synced = expr.text();
       const part = { [mode().field]: synced };
       if (mode().id === "ode" && boxes.length) { for (const b of boxes) b.sent = b.field.text() || "0"; part.ics = boxes.map((b) => b.sent); }
       actions.setInput(part);
     };
-    const later = () => { clearTimeout(timer); timer = setTimeout(send, 180); };
+    const later = () => { clearTimeout(timer); waiting = true; timer = setTimeout(send, 180); };
+    // Another mode or an example changes what the boxes hold. What was being typed is
+    // sent first (or dropped, when an example replaces it), and the boxes are refilled
+    // at once, not a frame later, so keys that follow straight away land in the new text.
+    const switchTo = (part) => { if (waiting) send(); actions.setInput(part); draw(); };
     const expr = mathField({ id: "inExpr", describedBy: "inHint inError", onChange: later, onEnter: send });
     const keys = h("div", { class: "mf-keys", role: "group", "aria-label": "Maths keys" });
     const hint = h("p", { class: "sd-hint", id: "inHint" });
@@ -60,7 +65,10 @@ export default {
     const error = h("p", { class: "sd-callout sd-danger", id: "inError", role: "alert", hidden: true });
     const examples = h("select", { id: "inExamples" }, h("option", { value: "", text: "Load an example…" }),
       [...new Set(PRESETS.map((p) => p.group))].map((g) => h("optgroup", { label: g }, PRESETS.filter((p) => p.group === g).map((p) => h("option", { value: p.id, text: p.name })))));
-    examples.addEventListener("change", () => { if (examples.value) actions.loadPreset(examples.value); examples.value = ""; });
+    examples.addEventListener("change", () => {
+      if (examples.value) { clearTimeout(timer); waiting = false; actions.loadPreset(examples.value); draw(); }
+      examples.value = "";
+    });
     // what the loaded example models; words with maths between $ signs
     const about = h("p", { class: "sd-hint about", hidden: true });
     const told = (text) => text.split("$").map((part, i) => (i % 2 ? m(part) : part));
@@ -113,6 +121,7 @@ export default {
       about.hidden = !preset;
       if (preset && about.dataset.id !== preset.id) { about.dataset.id = preset.id; about.replaceChildren(h("b", { text: preset.name + ". " }), ...told(preset.note)); }
     }
+    draw();   // filled from the first moment it is on the page
     return { update(state, dirty) { if (dirty.has("input") || dirty.has("model") || dirty.has("error") || dirty.has("preset")) draw(); } };
   },
 };
