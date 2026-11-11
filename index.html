@@ -85,7 +85,7 @@
         <tbody>
           <tr><td>2t, 3 sin(t), (s+1)(s+2)</td><td>Things side by side are multiplied. <code>*</code> works too.</td></tr>
           <tr><td>t^2, (s+1)^3</td><td>Whole-number powers: <span class="m" data-m="t^2,\ (s+1)^3"></span>.</td></tr>
-          <tr><td>e^(-2t), exp(-2t)</td><td>Exponentials, <span class="m" data-m="e^{-2t}"></span>. Put the power in brackets.</td></tr>
+          <tr><td>e^(-2t), exp(-2t)</td><td>Exponentials, <span class="m" data-m="e^{-2t}"></span>. The closing bracket ends the power.</td></tr>
           <tr><td>sin(3t), cos(2t + pi/4)</td><td>Sines and cosines, with an optional phase: <span class="m" data-m="\cos(2t + \tfrac{\pi}{4})"></span>. Also <code>sinh</code> and <code>cosh</code>.</td></tr>
           <tr><td>u(t)</td><td>The unit step. Every function here starts at <span class="m" data-m="t = 0"></span> anyway.</td></tr>
           <tr><td>y', y'', y^(4), dy/dt, d^2y/dt^2</td><td>Derivatives of <span class="m" data-m="y"></span>, in an equation: <span class="m" data-m="y',\ y'',\ y^{(4)},\ \tfrac{dy}{dt},\ \tfrac{d^2y}{dt^2}"></span>.</td></tr>
@@ -100,6 +100,19 @@
           <tr><td>Equation</td><td>A linear equation in <span class="m" data-m="y"></span> with number coefficients, up to order 8, such as <code>y'' + 2y' + 5y = e^(-t) cos(2t)</code>, with its starting values.</td></tr>
           <tr><td>Function <span class="m" data-m="f(t)"></span></td><td>Sums and products of numbers, powers of <span class="m" data-m="t"></span>, exponentials, sines and cosines.</td></tr>
           <tr><td>Transform <span class="m" data-m="F(s)"></span></td><td>A ratio of polynomials in <span class="m" data-m="s"></span> whose denominator has the higher degree, such as <code>(s + 3)/((s + 1)(s^2 + 4))</code>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h3>In a maths box</h3>
+      <table class="sd-table">
+        <tbody>
+          <tr><td><kbd class="sd-kbd">/</kbd></td><td>Starts a fraction. What stands just before it goes on top; select more first to put all of it there.</td></tr>
+          <tr><td><kbd class="sd-kbd">^</kbd></td><td>Starts a power. Everything typed next is raised, until you step out.</td></tr>
+          <tr><td><kbd class="sd-kbd">Space</kbd> <kbd class="sd-kbd">→</kbd></td><td>Steps out of a power or a fraction. <kbd class="sd-kbd">↑</kbd> and <kbd class="sd-kbd">↓</kbd> go between the top and the bottom of a fraction.</td></tr>
+          <tr><td><kbd class="sd-kbd">(</kbd></td><td>Brings its closing bracket with it, in grey until you type it.</td></tr>
+          <tr><td><kbd class="sd-kbd">⌫</kbd></td><td>At the start of a fraction or a power, takes it apart again.</td></tr>
+          <tr><td><kbd class="sd-kbd">Ctrl</kbd> + <kbd class="sd-kbd">Z</kbd></td><td>Undo. With <kbd class="sd-kbd">Shift</kbd>, redo. Copy and paste work on plain text, written the way the first table shows.</td></tr>
         </tbody>
       </table>
     </section>

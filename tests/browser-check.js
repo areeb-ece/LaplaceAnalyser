@@ -30,8 +30,8 @@ const browser = await chromium.launch({
 fs.mkdirSync(SHOTS, { recursive: true });
 
 const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-async function open(viewport, init) {
-  const context = await browser.newContext({ viewport });
+async function open(viewport, init, more = {}) {
+  const context = await browser.newContext({ viewport, ...more });
   if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const errors = [], outside = [];
@@ -66,7 +66,11 @@ const texOf = (page, selector) => page.locator(selector).first().getAttribute("d
 const complex = (text) => { const m = /= (-?[\d.]+) ([+-]) ([\d.]+)i/.exec(text); return [Number(m[1]), (m[2] === "-" ? -1 : 1) * Number(m[3])]; };
 const openViews = (page) => page.$$eval(".dk-stack", (els) => els.map((e) => e.dataset.view));
 const setTime = (page, t) => page.evaluate((v) => { const r = document.getElementById("timeRange"); r.value = String(v); r.dispatchEvent(new Event("input")); }, t);
-const typeExpr = async (page, text) => { await page.fill("#inExpr", text); await page.press("#inExpr", "Enter"); await frame(page); };
+// The maths boxes are typed into key by key, as a person would; what a box holds is
+// kept as text beside it (for screen readers), which is what gets read back here.
+const typeInto = async (page, id, text) => { await page.focus(id); await page.keyboard.press("Control+a"); await page.keyboard.press("Backspace"); await page.keyboard.type(text); };
+const typeExpr = async (page, text) => { await typeInto(page, "#inExpr", text); await page.keyboard.press("Enter"); await frame(page); };
+const exprText = (page) => page.textContent("#inExprText");
 const typeExprIn = async (page, mode, text) => { if (await page.locator('[data-key="tab:input"]').count()) await page.click('[data-key="tab:input"]'); await page.click(`[data-mode="${mode}"]`); await typeExpr(page, text); };
 
 let failed = false;
@@ -89,7 +93,7 @@ try {
 
     // First visit: the cosine, in the Overview layout, nothing playing.
     assert.deepEqual(await openViews(page), ["input", "surface", "time", "pz"]);
-    assert.equal(await page.inputValue("#inExpr"), "cos(t)");
+    assert.equal(await exprText(page), "cos(t)");
     assert.equal(await page.getAttribute("#btnPlay", "aria-pressed"), "false");
     assert.ok((await page.$$eval("#inExamples option", (o) => o.length)) - 1 >= 8, "at least 8 examples");
     assert.ok((await page.$$eval("#inExamples optgroup", (g) => g.length)) >= 8, "from several fields");
@@ -198,12 +202,12 @@ try {
     assert.equal(await page.getAttribute('[data-mode="ode"]', "aria-checked"), "true");
     await page.selectOption("#inExamples", "resonance");
     await frame(page);
-    assert.equal(await page.inputValue("#inExpr"), "y'' + 4y = cos(2t)");
+    assert.equal(await exprText(page), "y'' + 4y = cos(2t)");
     assert.equal(await page.locator(".steps li").count(), 5);
     assert.match(await page.locator(".steps .math").last().getAttribute("data-tex"), /y\(t\) = \\tfrac\{1\}\{4\}\\,t\\,\\sin\(2t\)/);
     assert.match(await figures(page, "decomp"), /Poles above the axis\nTheir conjugates\nTheir sum, y\(/, "the decomposition's key names each kind of pole");
     assert.match(await page.locator(".form .about").innerText(), /Forced at resonance/, "the example says what it models");
-    await page.fill("#inIc0", "1");
+    await typeInto(page, "#inIc0", "1");
     // typing is read after a short pause; wait for the solution to follow rather than for a fixed time
     await page.waitForFunction(() => /\\cos\(2t\)/.test([...document.querySelectorAll(".steps .math")].at(-1)?.dataset.tex ?? ""), null, { timeout: 10000 });
     await shot(page, "laptop-ode");
@@ -213,12 +217,67 @@ try {
     await typeExpr(page, "y''' + y = 1");
     assert.ok(await page.isHidden("#inError"));
     assert.equal(await page.locator("#dock").getAttribute("data-stale"), null);
-    assert.equal(await page.locator(".ics input").count(), 3, "a third-order equation asks for three starting values");
+    assert.equal(await page.locator(".ics .mf").count(), 3, "a third-order equation asks for three starting values");
     await page.click('[data-mode="rational"]');
-    await typeExpr(page, "s^2/(s+1)");
+    await typeExpr(page, "s^2 /(s+1)");
     assert.match(await page.locator("#inError").innerText(), /lower degree/);
-    await typeExpr(page, "1/(s^2 + 2s + 5)");
+
+    // ── the maths box: typeset while it is typed ──
+    const box = '.view[data-view="input"] .form > .sd-field .mf';
+    const keys = (text) => page.keyboard.type(text);
+    await typeInto(page, "#inExpr", "(s+3)/((s+1)(s^2 +4))");
+    assert.equal(await exprText(page), "(s + 3)/((s + 1)(s^2 + 4))", "a typed line comes out as the fraction it is");
+    assert.equal(await page.locator(`${box} .mf-frac`).count(), 1);
+    assert.equal(await page.locator(`${box} .mf-frac > .mf-row`).first().innerText(), "s+3", "brackets around a whole numerator are dropped");
+    assert.equal(await page.locator(`${box} .mf-sup`).count(), 1, "and ^ makes a power");
+    assert.equal(await page.locator(`${box} .mf-caret`).count(), 1, "the cursor is drawn while the box has the focus");
+    // the bar is level with the minus sign beside it
+    await typeInto(page, "#inExpr", "s-1/(s^2 +1)");
+    const level = await page.$eval(box, (el) => {
+      const line = el.querySelector(".mf-body > .mf-row");
+      return { bar: line.querySelector(".mf-frac > .mf-row + .mf-row").getBoundingClientRect().top, base: line.querySelector(":scope > .mf-base").getBoundingClientRect().top, size: parseFloat(getComputedStyle(line).fontSize) };
+    });
+    assert.ok(Math.abs(level.base - level.bar - 0.25 * level.size) < 1.5, `the fraction bar is a quarter of an em above the baseline (${(level.base - level.bar).toFixed(1)}px at ${level.size}px)`);
+    // without the space the power keeps going, and the box shows it
+    await typeInto(page, "#inExpr", "1/s^2+4");
+    assert.equal(await exprText(page), "1/(s^(2 + 4))");
+    // Backspace takes a fraction apart again; undo and redo
+    await typeInto(page, "#inExpr", "1/");
+    assert.equal(await page.locator(`${box} .mf-empty`).count(), 1, "an empty denominator shows as a box to fill");
+    await page.keyboard.press("Enter");
+    await frame(page);
+    assert.match(await page.locator("#inError").innerText(), /still empty/);
+    await page.keyboard.press("Backspace");
+    assert.equal(await exprText(page), "1");
+    await page.keyboard.press("Control+z");
+    assert.equal(await page.locator(`${box} .mf-frac`).count(), 1, "undo");
+    await page.keyboard.press("Control+Shift+z");
+    assert.equal(await page.locator(`${box} .mf-frac`).count(), 0, "redo");
+    // brackets close themselves; the keys under the box type for you
+    await typeInto(page, "#inExpr", "1/((s+1");
+    assert.equal(await page.locator(`${box} .mf-ghost`).count(), 2, "an open bracket gets a grey partner");
+    assert.equal(await exprText(page), "1/((s + 1))");
+    await typeInto(page, "#inExpr", "s");
+    await page.click('.mf-keys [aria-label="Power"]');
+    await keys("2 +1");
+    await page.keyboard.press("Control+a");
+    await page.click('.mf-keys [aria-label="Fraction"]');
+    await keys("s^3");
+    assert.equal(await exprText(page), "(s^2 + 1)/(s^3)", "a selection becomes the numerator");
+    // a click puts the cursor where it lands: in the numerator, after the s
+    const s0 = await page.locator(`${box} .mf-frac > .mf-row`).first().locator(".mf-var").boundingBox();
+    await page.mouse.click(s0.x + s0.width - 1, s0.y + s0.height / 2);
+    await keys("t");
+    assert.equal(await exprText(page), "(st^2 + 1)/(s^3)");
+    // pasted text is read whole, the way the parser reads it
+    await page.focus("#inExpr");
+    await page.keyboard.press("Control+a");
+    await page.evaluate(() => { const data = new DataTransfer(); data.setData("text/plain", "1/(s^2 + 2s + 5)"); document.getElementById("inExpr").dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })); });
+    assert.equal(await exprText(page), "1/(s^2 + 2s + 5)");
+    await page.keyboard.press("Enter");
+    await frame(page);
     assert.ok(await page.isHidden("#inError"));
+    await shot(page, "laptop-typed");
 
     // ── panels: move, resize, close, reopen, and all of it after a reload ──
     await page.click('[data-layout="overview"]');
@@ -259,7 +318,7 @@ try {
     await frame(page);
     assert.deepEqual(await openViews(page), layout, "the layout survives a reload");
     assert.equal(await page.evaluate(() => localStorage.getItem("laplaceanalyser.layout")), sizes);
-    assert.equal(await page.inputValue("#inExpr"), "1/(s^2 + 2s + 5)", "and so does the last input");
+    assert.equal(await exprText(page), "1/(s^2 + 2s + 5)", "and so does the last input");
     await frame(page);
     await shot(page, "laptop-rearranged");
     await page.click("#btnViews");
@@ -371,10 +430,20 @@ try {
 
   // ── phone: one column, nothing sideways ──
   {
-    const { page, clean } = await open({ width: 390, height: 844 });
+    const { page, clean } = await open({ width: 390, height: 844 }, null, { hasTouch: true });
     assert.equal(await page.getAttribute("#dock", "data-mode"), "stacked");
     const heights = await page.$$eval(".dk-body", (els) => els.map((e) => e.clientHeight));
     assert.ok(heights.every((v) => v > 100), `every view has room: ${heights}`);
+    // a tap puts the cursor in the maths box (and so raises the keyboard); its keys type for a thumb
+    await page.tap('.view[data-view="input"] .form > .sd-field .mf');
+    assert.equal(await page.evaluate(() => document.activeElement.id), "inExpr");
+    await page.keyboard.type(" +t");
+    await page.tap('.mf-keys [aria-label="Power"]');
+    await page.keyboard.type("2 /3");
+    await page.keyboard.press("Enter");
+    await frame(page);
+    assert.equal(await exprText(page), "cos(t) + t^2/3");
+    assert.ok(await page.isHidden("#inError"));
     await page.screenshot({ path: path.join(SHOTS, "phone.png"), fullPage: true, timeout: 120000 });
     await clean("phone");
     await page.context().close();
@@ -385,7 +454,7 @@ try {
     const { page, clean } = await open({ width: 1280, height: 720 }, () => {
       Object.defineProperty(window, "localStorage", { get() { throw new DOMException("denied", "SecurityError"); } });
     });
-    assert.equal(await page.inputValue("#inExpr"), "cos(t)");
+    assert.equal(await exprText(page), "cos(t)");
     await page.click('[data-layout="probe"]');
     assert.equal((await openViews(page)).length, 5);
     await clean("without storage");
@@ -398,7 +467,7 @@ try {
       try { localStorage.setItem("laplaceanalyser.layout", '{"v":1,"tree":{"type":"split","children":[{"type":"stack","tabs":["nope"]}]}}'); localStorage.setItem("laplaceanalyser.state", "{not json"); } catch (e) { /* none */ }
     });
     assert.deepEqual(await openViews(page), ["input", "surface", "time", "pz"]);
-    assert.equal(await page.inputValue("#inExpr"), "cos(t)");
+    assert.equal(await exprText(page), "cos(t)");
     await clean("with broken saved data");
     await page.context().close();
   }

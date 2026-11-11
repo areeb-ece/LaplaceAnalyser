@@ -1,17 +1,28 @@
 // Where the problem is typed: a differential equation with its starting values, a
-// function of time, or a transform. Every keystroke is re-read; what the tool
-// understood is set as maths underneath, and anything it can't do is said in words.
+// function of time, or a transform. The boxes typeset the maths as it is typed
+// (mathfield.js), every keystroke is re-read, and anything the tool can't do is said in
+// words.
 import { h, clear } from "../ui.js";
-import { tex, m } from "../math.js";
+import { m } from "../math.js";
+import { mathField } from "../mathfield.js";
 import { parseEquation } from "../lib/parse.js";
 import { odeFromAst } from "../lib/ode.js";
 import { PRESETS } from "../lib/presets.js";
 
+// The keys under the box: what each shows (as maths), what it is called, and what it types.
+const KEY = {
+  d1: ["y'", "First derivative", "y'"], d2: ["y''", "Second derivative", "y''"],
+  frac: ["\\tfrac{a}{b}", "Fraction", "/"], pow: ["a^b", "Power", "^"], exp: ["e^{a}", "Exponential", "e^"],
+  sin: ["\\sin", "Sine", "sin("], cos: ["\\cos", "Cosine", "cos("], root: ["\\sqrt{a}", "Square root", "sqrt"], pi: ["\\pi", "Pi", "pi"],
+};
 const MODES = [
-  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"]] },
-  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"]] },
-  { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"]] },
+  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", keys: ["d1", "d2", "frac", "pow", "exp", "sin", "cos"], hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"]] },
+  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", keys: ["frac", "pow", "exp", "sin", "cos", "root", "pi"], hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"]] },
+  { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", keys: ["frac", "pow", "root", "pi"], hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"]] },
 ];
+// How the box behaves, said once under every mode's own hint.
+const HOW = [["/"], " starts a fraction and ", ["^"], " a power; ", ["Space"], " or ", ["→"], " steps out of one."];
+const typedAs = (parts) => parts.map((part) => (Array.isArray(part) ? h("code", { text: part[0] }) : part));
 // y(0), y'(0), … as maths (the labels of the starting-value boxes) and as plain words (for errors).
 const yTex = (k) => (k <= 3 ? "y" + "'".repeat(k) : `y^{(${k})}`) + "(0)";
 
@@ -30,13 +41,23 @@ export default {
     const seg = h("div", { class: "sd-seg", role: "radiogroup", "aria-label": "What to start from" },
       MODES.map((x) => h("button", { type: "button", role: "radio", "data-mode": x.id, on: { click: () => actions.setInput({ mode: x.id }) } }, x.name, x.sym ? [" ", m(x.sym)] : null)));
     const label = h("label", { class: "sd-label", for: "inExpr" });
-    const expr = h("input", { class: "sd-input sd-mono", id: "inExpr", type: "text", autocomplete: "off", autocapitalize: "off", spellcheck: false, "aria-describedby": "inHint inError" });
+    let order = 2, timer = 0, synced = null, boxes = [];
+    const mode = () => MODES.find((x) => x.id === store.state.input.mode);
+    // what the boxes hold goes to the store a moment after the last key, or at once on Enter
+    const send = () => {
+      clearTimeout(timer);
+      synced = expr.text();
+      const part = { [mode().field]: synced };
+      if (mode().id === "ode" && boxes.length) { for (const b of boxes) b.sent = b.field.text() || "0"; part.ics = boxes.map((b) => b.sent); }
+      actions.setInput(part);
+    };
+    const later = () => { clearTimeout(timer); timer = setTimeout(send, 180); };
+    const expr = mathField({ id: "inExpr", describedBy: "inHint inError", onChange: later, onEnter: send });
+    const keys = h("div", { class: "mf-keys", role: "group", "aria-label": "Maths keys" });
     const hint = h("p", { class: "sd-hint", id: "inHint" });
     const icsGrid = h("div", { class: "ics" });
     const ics = h("fieldset", { class: "sd-fieldset" }, h("legend", { text: "Starting values" }), icsGrid);
     const error = h("p", { class: "sd-callout sd-danger", id: "inError", role: "alert", hidden: true });
-    const math = h("div", { class: "math", role: "math" });
-    const readas = h("div", { class: "readas" }, "Read as", math);
     const examples = h("select", { id: "inExamples" }, h("option", { value: "", text: "Load an example…" }),
       [...new Set(PRESETS.map((p) => p.group))].map((g) => h("optgroup", { label: g }, PRESETS.filter((p) => p.group === g).map((p) => h("option", { value: p.id, text: p.name })))));
     examples.addEventListener("change", () => { if (examples.value) actions.loadPreset(examples.value); examples.value = ""; });
@@ -45,41 +66,45 @@ export default {
     const told = (text) => text.split("$").map((part, i) => (i % 2 ? m(part) : part));
     el.append(h("form", { class: "form", novalidate: true, on: { submit: (e) => e.preventDefault() } },
       seg,
-      h("div", { class: "sd-field" }, label, expr, hint),
-      error, ics, readas,
+      h("div", { class: "sd-field" }, label, expr.el, keys, hint),
+      error, ics,
       h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inExamples", text: "Examples" }), h("span", { class: "sd-select sd-small" }, examples), about)));
 
-    let order = 2, timer = 0;
-    const mode = () => MODES.find((x) => x.id === store.state.input.mode);
-    const later = (fn) => { clearTimeout(timer); timer = setTimeout(fn, 180); };
-    expr.addEventListener("input", () => later(() => actions.setInput({ [mode().field]: expr.value })));
-    expr.addEventListener("keydown", (e) => { if (e.key === "Enter") { clearTimeout(timer); actions.setInput({ [mode().field]: expr.value }); } });
-
+    // the starting values: one small box each, read the same way as the big one
     function drawIcs(input) {
       order = orderOf(input.ode, order);
-      if (icsGrid.children.length === order) {
-        [...icsGrid.querySelectorAll("input")].forEach((box, k) => { if (document.activeElement !== box) box.value = input.ics[k] ?? "0"; });
+      if (boxes.length === order) {
+        boxes.forEach((box, k) => { if (box.sent !== (input.ics[k] ?? "0")) { box.sent = input.ics[k] ?? "0"; box.field.set(box.sent); } });
         return;
       }
       clear(icsGrid);
-      for (let k = 0; k < order; k++) {
-        const box = h("input", { class: "sd-input sd-small sd-mono", id: "inIc" + k, type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: false, value: input.ics[k] ?? "0" });
-        box.addEventListener("input", () => later(() => {
-          const next = Array.from({ length: order }, (_, i) => icsGrid.querySelector("#inIc" + i)?.value ?? "0");
-          actions.setInput({ ics: next });
-        }));
-        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k }, m(yTex(k))), box));
-      }
+      boxes = Array.from({ length: order }, (_, k) => {
+        const box = { sent: input.ics[k] ?? "0" };
+        box.field = mathField({ id: "inIc" + k, compact: true, describedBy: "inError", onChange: later, onEnter: send });
+        box.field.set(box.sent);
+        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k }, m(yTex(k))), box.field.el));
+        return box;
+      });
     }
 
     function draw() {
-      const { input, model, error: message } = store.state, md = mode();
+      const { input, error: message } = store.state, md = mode();
       for (const b of seg.children) b.setAttribute("aria-checked", String(b.dataset.mode === input.mode));
       label.textContent = md.label;
-      // what to type is shown as typed (in the code face); the maths around it is typeset
-      if (hint.dataset.mode !== md.id) { hint.dataset.mode = md.id; hint.replaceChildren(...md.hint.map((part) => (Array.isArray(part) ? h("code", { text: part[0] }) : part))); }
-      if (document.activeElement !== expr) expr.value = input[md.field];
-      expr.setAttribute("aria-invalid", String(!!message));
+      if (hint.dataset.mode !== md.id) {
+        hint.dataset.mode = md.id;
+        // what to type is shown as typed (in the code face); the maths around it is typeset
+        hint.replaceChildren(...typedAs(md.hint), h("span", { class: "how" }, typedAs(HOW)));
+        keys.replaceChildren(...md.keys.map((id) => {
+          const [face, name, types] = KEY[id];
+          // mousedown is stopped so the cursor stays in the box while its keys are pressed
+          return h("button", { class: "sd-btn sd-small", type: "button", "aria-label": name, title: name, on: { mousedown: (e) => e.preventDefault(), click: () => { expr.insert(types); expr.focus(); } } }, m(face));
+        }));
+      }
+      // the box is refilled only when the store's text is news to it (an example, another
+      // mode, a saved session), never with an older copy of what is being typed
+      if (input[md.field] !== synced) { synced = input[md.field]; if (expr.text() !== synced) expr.set(synced); }
+      expr.invalid(!!message);
       ics.hidden = input.mode !== "ode";
       if (input.mode === "ode") drawIcs(input);
       error.hidden = !message;
@@ -87,8 +112,6 @@ export default {
       const preset = PRESETS.find((p) => p.id === store.state.preset);
       about.hidden = !preset;
       if (preset && about.dataset.id !== preset.id) { about.dataset.id = preset.id; about.replaceChildren(h("b", { text: preset.name + ". " }), ...told(preset.note)); }
-      readas.hidden = !!message || !model?.typed;
-      if (!message && model?.typed) tex(math, model.typed, true);
     }
     return { update(state, dirty) { if (dirty.has("input") || dirty.has("model") || dirty.has("error") || dirty.has("preset")) draw(); } };
   },

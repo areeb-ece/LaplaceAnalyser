@@ -365,3 +365,28 @@ Added at areeb's request, on the same architecture:
 - **Sixty-one examples in eleven fields**, each with a note on what it models.
 - **Not offered: SVG.** The other tools save SVG, but the surface is a WebGL raster, so
   a vector file could only hold part of the picture.
+
+## 16. The maths box
+
+Added at areeb's request: typing that works like Desmos's.
+
+- **The boxes typeset the maths as it is typed.** `/` starts a fraction with what
+  stands before it on top, `^` a power, brackets bring their partners, `sqrt` and `pi`
+  turn into their signs. The starting values use the same box, small.
+- **Hand-written, no new dependency.** The tree and every edit to it are in
+  `js/lib/field.js` (pure, unit tested); `js/mathfield.js` draws the tree with KaTeX's
+  fonts and feeds it keys from a hidden text box that rides on the cursor, so phone
+  keyboards, input methods and screen readers still have a real field.
+- **The text syntax is unchanged, and is still what is stored.** The box writes its
+  tree out in the syntax `parse.js` reads, so examples, saved sessions and the engine
+  are as they were. Every example is checked three ways: read into the box, written
+  back out, and typed key by key, each giving the same worked steps.
+- **Closer to typed text than Desmos is, where that is safe.** A space at the end of a
+  power or fraction steps out of it, the bracket that closes a whole power ends it, and
+  an `=` always goes to the top line, so the examples in the hints can be typed exactly
+  as printed.
+- **The "Read as" line is gone.** The box itself now shows how the input is read.
+- **Still never a guess.** A power and a fraction show where they end, so typing can't
+  be ambiguous; pasted text that is (`e^-2t`, `1/2t`) stays as plain characters and is
+  asked about as before. An empty box inside the maths is refused in words.
+
