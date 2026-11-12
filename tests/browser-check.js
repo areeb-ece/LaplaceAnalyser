@@ -219,8 +219,8 @@ try {
     assert.equal(await page.locator("#dock").getAttribute("data-stale"), null);
     assert.equal(await page.locator(".ics .mf").count(), 3, "a third-order equation asks for three starting values");
     await page.click('[data-mode="rational"]');
-    await typeExpr(page, "s^2 /(s+1)");
-    assert.match(await page.locator("#inError").innerText(), /lower degree/);
+    await typeExpr(page, "e^(-2s) /s");
+    assert.match(await page.locator("#inError").innerText(), /delay factor/);
 
     // ── the maths box: typeset while it is typed ──
     const box = '.view[data-view="input"] .form > .sd-field .mf';
@@ -435,6 +435,41 @@ try {
       assert.ok(await page.isHidden("#inError"), id);
       if (["car", "coupled", "aircraft", "string", "erlang"].includes(id)) await shot(page, "example-" + id);
     }
+
+    // ── impulses at t = 0: an arrow on the time plot, the first arrow of the integral, named in each key ──
+    const tex = (sel) => page.$$eval(sel, (els) => els.map((e) => e.dataset.tex || ""));
+    await page.click('[data-layout="probe"]');
+    await page.click('[data-key="tab:input"]');
+    await page.selectOption("#inExamples", "highpass");
+    await page.click('[data-key="tab:time"]');
+    await frame(page);
+    assert.ok((await tex('.view[data-view="time"] .mlayer .ml')).some((t) => /\\delta\(t\)/.test(t)), "the time plot labels the impulse");
+    assert.match(await page.locator('.view[data-view="integral"] .key').innerText(), /First, at t = 0/, "the integral's key names the impulses' jump");
+    assert.match(await page.locator('.view[data-view="integral"] .key').innerText(), /Converges/);
+    assert.match(await page.locator('.view[data-view="integrand"] .key').innerText(), /Not drawn: at t = 0/);
+    await shot(page, "example-highpass");
+    await page.click('[data-layout="ode"]');
+    await page.selectOption("#inExamples", "hammer");
+    await frame(page);
+    assert.ok((await tex(".steps .math")).some((t) => /y\(0\^-\) = 0/.test(t)), "starting values just before the blow");
+    assert.deepEqual(await tex(".ics .sd-label .m"), ["Iy(0^-)", "Iy'(0^-)"], "and the boxes say so");
+    await shot(page, "example-hammer");
+    // impulses alone: no poles, the whole plane converges, nothing to decompose
+    await page.selectOption("#inExamples", "impulse");
+    await frame(page);
+    assert.ok((await tex('.view[data-view="decomp"] .mlayer .ml')).some((t) => /No poles/.test(t)));
+    assert.match(await page.locator('.view[data-view="decomp"] .key').innerText(), /Plus, at t = 0 only/);
+    await shot(page, "example-impulse");
+    // typed with the box's δ key
+    await page.click('[data-mode="function"]');
+    await typeInto(page, "#inExpr", "2");
+    await page.click('.mf-keys [aria-label="Unit impulse"]');
+    await page.keyboard.type("t) + e^(-t");
+    await page.keyboard.press("Enter");
+    await frame(page);
+    assert.equal(await exprText(page), "2delta(t) + e^(-t)");
+    assert.ok(await page.isHidden("#inError"));
+    assert.ok((await tex(".steps .math")).some((t) => /F\(s\) = 2 \+ \\frac\{1\}\{s \+ 1\}/.test(t)), "transformed term by term");
     await clean("examples");
     await page.context().close();
   }

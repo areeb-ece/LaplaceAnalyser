@@ -59,7 +59,7 @@ function factorStart(items, end) {
     const it = items[j - 1];
     if (it.k !== "ch") { j--; continue; }
     if (it.c === ")") { const open = openerOf(items, j - 1); if (open < 0) break; j = open; continue; }
-    if (!/[0-9a-zπ.']/.test(it.c)) break;
+    if (!/[0-9a-zπδ.']/.test(it.c)) break;
     j--;
   }
   return j;
@@ -92,7 +92,7 @@ export function kinds(r) {
       if (!word) { out[k] = "var"; continue; }
       for (let n = 0; n < word.length; n++) out[k + n] = "fn";
       k += word.length - 1;
-    } else if (c === "π") out[k] = "var";
+    } else if (c === "π" || c === "δ") out[k] = "var";
     else if (c === "+" || c === "-") out[k] = k === 0 || among(items[k - 1], "+-*=(/^") ? "sign" : "bin";
     else out[k] = c === "*" ? "bin" : c === "=" ? "rel" : c === "(" ? "open" : c === ")" ? "close" : c === "'" ? "prime" : "other";
   }
@@ -116,6 +116,7 @@ export function toText(r) {
     if (it.k === "ch") {
       if (kind[k] === "rel" || (kind[k] === "bin" && it.c !== "*")) out += ` ${it.c} `;
       else if (it.c === "π") out += /[a-z]$/.test(out) ? " pi" : "pi";
+      else if (it.c === "δ") out += /[a-z]$/.test(out) ? " delta" : "delta";
       else out += it.c;
     } else if (it.k === "sup") {
       const text = toText(it.body);
@@ -193,8 +194,10 @@ function read(s) {
     if (!w) throw FLAT;
     if (w === "sqrt") return root(items);
     if (w === "pi") { items.push(ch("π")); i += 2; return; }
-    items.push(...chars(w)); i += w.length;
+    items.push(...(w === "delta" ? [ch("δ")] : chars(w))); i += w.length;
     if (w === "y") { while (s[i] === "'") { items.push(ch("'")); i++; } return; }
+    // delta'(t): the impulse's derivatives carry their primes before the bracket
+    if (w === "delta" || w === "dirac") while (s[i] === "'") { items.push(ch("'")); i++; }
     if (FUNCS.has(w)) { skip(); if (s[i] !== "(") throw FLAT; group(items); }
   }
   function exponent(base) {         // what follows a ^
@@ -264,6 +267,7 @@ function read(s) {
         const w = wordAt();
         if (w === "sqrt") { root(items); continue; }
         if (w === "pi") { items.push(ch("π")); i += 2; continue; }
+        if (w === "delta") { items.push(ch("δ")); i += 5; continue; }
         items.push(...chars(w || c)); i += (w || c).length;
         continue;
       }
@@ -529,6 +533,9 @@ function key(st, c) {
   } else if (c === "i" && spelled(r.items, i + 1, "pi")) {
     r.items.splice(i - 1, 2, ch("π"));
     st.cur = { row: r, i };
+  } else if (c === "a" && spelled(r.items, i + 1, "delta")) {
+    r.items.splice(i - 4, 5, ch("δ"));
+    st.cur = { row: r, i: i - 3 };
   }
 }
 /** Type these characters, one key at a time. */

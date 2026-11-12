@@ -58,21 +58,21 @@ The portfolio reserves the path (`laplaceanalyser` in `reservedSlugs` in its
 | Mode | Takes | Example |
 | --- | --- | --- |
 | Equation | A linear differential equation in `y` with number coefficients, up to order 8, and its starting values | `y'' + 2y' + 5y = e^(-t) cos(2t)` |
-| Function f(t) | Sums and products of numbers, powers of `t`, exponentials, sines and cosines | `t^2 e^(-2t) + sin(3t)` |
-| Transform F(s) | A ratio of polynomials in `s` whose denominator has the higher degree | `(s + 3)/((s + 1)(s^2 + 4))` |
+| Function f(t) | Sums and products of numbers, powers of `t`, exponentials, sines and cosines, and impulses at $t = 0$ | `t^2 e^(-2t) + sin(3t)`, `2delta(t) + e^(-t)` |
+| Transform F(s) | A ratio of polynomials in `s` | `(s + 3)/((s + 1)(s^2 + 4))`, `s/(s + 1)` |
 
-The **Examples** list has 61 starting points from eleven fields, each with a line on
+The **Examples** list has 67 starting points from eleven fields, each with a line on
 what it models:
 
 | Field | Among the examples |
 | --- | --- |
-| Signals | step, ramp, exponentials, damped sinusoid, beats, a square wave's first harmonics, a plucked string |
-| Electric circuits | RC and RL switched on, RC with a sine source, LC, series RLC under-, over- and critically damped |
+| Signals | step, ramp, exponentials, damped sinusoid, beats, a square wave's first harmonics, a plucked string, the unit impulse and its derivative |
+| Electric circuits | RC and RL switched on, RC with a sine source, LC, series RLC under-, over- and critically damped, an RC high-pass's impulse response |
 | Filters and communications | low-pass and band-pass filters, Butterworth of order 3 and 4, an AM signal, a phase-locked loop |
-| Control systems | proportional and PI control, a DC motor, a double integrator, an inverted pendulum falling and held |
-| Mechanics and structures | mass on a spring, resonance and near-resonance, a seismometer, coupled masses, a car suspension, a loaded beam |
+| Control systems | proportional and PI control, a DC motor, a double integrator, an inverted pendulum falling and held, a lead compensator |
+| Mechanics and structures | mass on a spring, a hammer blow, resonance and near-resonance, a seismometer, coupled masses, a car suspension, a loaded beam |
 | Heat and fluids | cooling, a lagging thermometer, tanks in series, a ball with air drag, river flow after a storm |
-| Chemistry and medicine | a decay chain, drug levels after an injection and after a tablet, blood sugar, a nerve cell |
+| Chemistry and medicine | a decay chain, drug levels after an injection, a bolus and a tablet, blood sugar, a nerve cell |
 | Physics | radioactive decay, a kicked oscillator, a driven damped oscillator |
 | Probability and queues | exponential and Erlang waiting times, two stages at different rates |
 | Economics | present value of a growing income, a business cycle |
@@ -103,6 +103,7 @@ here. Copy and paste work on plain text in this syntax:
 | `e^(-2t)`, `exp(-2t)`, `2^t` | Exponentials. The closing bracket ends the power. |
 | `sin(3t)`, `cos(2t + pi/4)`, `sinh(t)`, `cosh(t)` | The argument must be of the form `a·t + b`. |
 | `u(t)`, `step(t)` | The unit step. Every function starts at `t = 0` anyway. |
+| `delta(t)`, `delta'(t)`, `delta''(t)` | The unit impulse at `t = 0` and its derivatives, up to the 4th. Also `δ(t)` and `dirac(t)`; the box shows `δ`. |
 | `y'`, `y''`, `y^(4)`, `dy/dt`, `d^2y/dt^2` | Derivatives of `y`, in an equation. |
 | `1/2`, `pi`, `e`, `sqrt(2)`, `1e-6` | Numbers, anywhere a number is wanted, including starting values. |
 
@@ -116,14 +117,39 @@ Each of these is refused with a message that says why:
 
 - Functions whose transform isn't a ratio of polynomials: `1/t`, `sqrt(t)`, `sin(t^2)`,
   `e^(t^2)`, `tan(t)`, `ln(t)`.
-- Delayed steps `u(t - a)` and delay factors `e^(-as)`.
-- Improper transforms such as `s^2/(s + 1)`, whose inverse contains impulses.
+- Delayed steps `u(t - a)`, delayed impulses `delta(t - a)` and delay factors `e^(-as)`.
+- Squares and products of impulses, `delta(t)^2`, and impulses inside a function,
+  `sin(delta(t))`: none of these has a meaning.
+- Derivatives of the impulse beyond the 4th, typed or produced by a transform whose
+  numerator's degree is more than 4 above its denominator's.
 - Non-linear and variable-coefficient equations: `y'' + y^2 = 0`, `t y' + y = 0`.
 - Symbolic parameters: coefficients have to be numbers.
 - More than 12 poles in all.
 
 A transform typed directly is taken to belong to a causal signal, so its region of
 convergence is to the right of its rightmost pole.
+
+### Impulses
+
+`delta(t)` is the unit impulse at $t = 0$: no width, area $1$, and
+$\mathcal{L}\{\delta^{(k)}(t)\} = s^k$. So impulses are exactly the polynomial part of a
+transform. A transform whose numerator's degree isn't the lower one is divided out first,
+$\frac{s^2}{s+1} = s - 1 + \frac{1}{s+1}$, and its inverse starts with impulses:
+$\delta'(t) - \delta(t) + e^{-t}$.
+
+- A product sifts: $g(t)\,\delta(t) = g(0)\,\delta(t)$, and
+  $g(t)\,\delta'(t) = g(0)\,\delta'(t) - g'(0)\,\delta(t)$.
+- In an equation, an impulse on the right is a blow at $t = 0$. The starting values are
+  the ones just before it, at $t = 0^-$, which is what the transform uses; $y$ or its
+  derivatives jump at $t = 0^+$.
+- Impulses alone have no poles, so their integral converges for every $s$.
+- **Time domain:** an arrow at $t = 0$ labelled with the impulses. Every value plotted
+  or read out is at $t > 0$, where impulses are zero.
+- **Integral:** the impulses add $\sum_k d_k s^k$ at once, between $t = 0^-$ and $0^+$.
+  They are the first arrow, from the origin; the numerical integral carries on from its
+  tip.
+- **Integrand** and **Decomposition:** an impulse has no point to plot and no pole, so
+  each view names it in its key.
 
 ### The views
 
@@ -135,7 +161,7 @@ convergence is to the right of its rightmost pole.
 | S-plane surface | Height is $\lvert F(s)\rvert$, hue is $\arg F(s)$. Poles are spikes, cut at the height limit. |
 | Pole-zero map | Poles (×), zeros (○), the region where the integral converges, and the probe. |
 | Integrand | $f(t)e^{-st}$ traced in the complex plane up to the time cursor. |
-| Integral | $\int_0^t f(\tau)e^{-s\tau}\,d\tau$ as arrows laid tip to tail, with $F(s)$ marked. |
+| Integral | $\int_{0^-}^t f(\tau)e^{-s\tau}\,d\tau$ as arrows laid tip to tail, with $F(s)$ marked. |
 | Decomposition | One phasor per pole, its residue times $e^{pt}$, summed tip to tail to give $f(t)$. |
 
 Two things drive every view: the **time cursor** $t$ (the strip under the title bar) and
@@ -291,12 +317,15 @@ form exactly, without a computer algebra system.
    forcing pole merges exactly with a characteristic root.
 6. **Partial fractions**, repeated poles included, by expanding numerator and
    denominator about each pole and dividing the power series.
-7. **Invert**: $A/(s-p)^j \mapsto A\,t^{\,j-1}e^{pt}/(j-1)!$.
-8. **Check**: the partial fractions must add back up to the fraction they came from, or
-   the input is refused as too ill-conditioned to show.
+7. **Invert**: $A/(s-p)^j \mapsto A\,t^{\,j-1}e^{pt}/(j-1)!$, and the polynomial part
+   (found by long division) $\sum_k d_k s^k \mapsto \sum_k d_k\,\delta^{(k)}(t)$.
+8. **Check**: the polynomial part and the partial fractions must add back up to the
+   fraction they came from, or the input is refused as too ill-conditioned to show.
 
 The integral view never uses the closed form. It integrates $f(t)e^{-st}$ by Simpson's
-rule, so its agreement with $F(s)$ is a real check.
+rule, so its agreement with $F(s)$ is a real check. Impulses at $t = 0$ are the one
+part added by their definition, $\int \delta^{(k)}(t)\,e^{-st}\,dt = s^k$, not
+numerically.
 
 ### One drawing function per view
 

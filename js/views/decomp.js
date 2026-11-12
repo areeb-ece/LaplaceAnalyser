@@ -2,13 +2,15 @@
 // turning at the pole's imaginary part and growing or shrinking at its real part. Laid
 // tip to tail they add up to f(t). Conjugate pairs cancel each other's imaginary parts,
 // so the sum stays on the real axis, where it draws the signal as time runs. Down the
-// left, each e^(pt) on its own.
+// left, each e^(pt) on its own. Impulses at t = 0 have no pole and no phasor: the key
+// names them.
 import { h } from "../ui.js";
 import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
 import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, drawPlane, arrow, dot } from "../plot2d.js";
-import { cplx, texNum } from "../lib/tex.js";
+import { cplx, texNum, impTex } from "../lib/tex.js";
+import { hasImpulses } from "../lib/analyse.js";
 
 const TRACE = 1.7; // how far down the trace of past values hangs, in units of the phasors' reach
 
@@ -52,6 +54,8 @@ const sumAt = (chain, t) => chain.reduce((x, p) => x + phasor(p, t)[0], 0);
 /** Draw the small e^(pt) panels (where there's room), the phasor chain and the trace of its sum. */
 export function paintDecomp(g, state, o, cache) {
   const { ctx, w: full, h: hgt, pal, math } = g, { time } = state, b = build(state, cache), t = time.t, n = b.chain.length;
+  // impulses alone: no poles, so no phasors and no sum to trace
+  if (!n) { math("\\text{No poles, so nothing turns}", full / 2, hgt / 2, { align: "center", color: pal.ink2, halo: false }); return; }
   // ── the small panels: one or two columns down the left, each as big as fits ──
   const cols = n > 5 ? 2 : 1, rows = Math.ceil(n / cols), size = Math.min(92, Math.floor((hgt - 8) / rows) - 26);
   const strip = full >= 360 && size >= 34 ? cols * (size + 10) + 6 : 0;
@@ -114,7 +118,8 @@ export function decompLegend(state, o, cache = {}) {
   const b = build(state, cache), roles = new Set(b.chain.map((p) => p.role)), out = [];
   if (roles.has("phUp")) out.push({ mark: "arrow", role: "phUp", text: "Poles above the axis" }, { mark: "arrow", role: "phDown", text: "Their conjugates" });
   if (roles.has("phReal")) out.push({ mark: "arrow", role: "phReal", text: "Real poles" });
-  out.push({ mark: "line", role: "signal", text: "Their sum,", tint: true, tex: `${state.model.sig}(${texNum(state.time.t)}) = ${texNum(sumAt(b.chain, state.time.t), 4)}` });
+  if (b.chain.length) out.push({ mark: "line", role: "signal", text: "Their sum,", tint: true, tex: `${state.model.sig}(${texNum(state.time.t)}) = ${texNum(sumAt(b.chain, state.time.t), 4)}` });
+  if (hasImpulses(state.model)) out.push({ text: "Plus, at t = 0 only,", tex: impTex(state.model.imp) });
   return out;
 }
 

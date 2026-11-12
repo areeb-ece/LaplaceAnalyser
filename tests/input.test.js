@@ -12,6 +12,21 @@ const fn = (fn) => ({ mode: "function", fn });
 const rat = (rational) => ({ mode: "rational", rational });
 const ode = (ode, ics = []) => ({ mode: "ode", ode, ics });
 
+test("impulses that can't be handled", () => {
+  refuse(fn("delta(t)^2"), /Powers of an impulse/);
+  refuse(fn("delta(t) delta(t)"), /Two impulses can't be multiplied/);
+  refuse(fn("sin(delta(t))"), /can't go inside sin/);
+  refuse(fn("e^(delta(t))"), /can't go in a power/);
+  refuse(fn("1/delta(t)"), /Dividing by an impulse/);
+  refuse(fn("delta(t - 2)"), /impulse at t = 2, a delayed one/);
+  refuse(fn("delta(t + 1)"), /before the transform starts/);
+  refuse(fn("delta(3)"), /has to be t/);
+  refuse(fn("delta'''''(t)"), /too high an order/);
+  refuse(fn("delta"), /in brackets/);
+  refuse(ode("y'' + delta(t) y = 0"), /plain numbers/);
+  refuse(ode("y'' + y = delta(t - 1)"), /delayed/);
+});
+
 test("functions outside the supported family", () => {
   refuse(fn(""), /nothing to work with/);
   refuse(fn("1/t"), /divide by a number or by a single exponential/);
@@ -57,10 +72,9 @@ test("the readings that are unambiguous are accepted", () => {
   near(at("STEP(T) * 5", 1), 5);
 });
 
-test("transforms that aren't proper rational functions", () => {
-  refuse(rat("s^2/(s+1)"), /lower degree than the denominator/);
-  refuse(rat("(s+1)/(s+2)"), /lower degree than the denominator/);
-  refuse(rat("s + 1"), /polynomial in s/);
+test("transforms that aren't rational functions, or need too high a derivative of δ", () => {
+  refuse(rat("s^6/(s+1)"), /5th derivative of an impulse/);
+  refuse(rat("s^5"), /5th derivative of an impulse/);
   refuse(rat("e^(-2s)/s"), /delay factor/);
   refuse(rat("exp(-s)/(s+1)"), /delay factor/);
   refuse(rat("1/sqrt(s)"), /ratio of polynomials/);

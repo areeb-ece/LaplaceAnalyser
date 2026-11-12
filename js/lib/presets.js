@@ -21,6 +21,8 @@ export const PRESETS = [
   { id: "square", group: "Signals", name: "Square wave, three harmonics", input: fn("sin(t) + sin(3t)/3 + sin(5t)/5"), probe: [0.5, 3], tMax: 15, note: "The first three terms of a square wave's Fourier series: three pairs of poles on the imaginary axis." },
   { id: "string", group: "Signals", name: "Plucked string", input: fn("e^(-0.3t)(sin(4t) + 0.5sin(8t) + 0.25sin(12t))"), probe: [0.5, 4], tMax: 10, note: "A note and two overtones dying away together: three pairs of poles in a column at real part $-0.3$." },
   { id: "burst", group: "Signals", name: "Tone burst", input: fn("t e^(-0.8t) sin(6t)"), probe: [0.2, 6], note: "A tone that swells and fades. Double poles at $-0.8 \\pm 6i$." },
+  { id: "impulse", group: "Signals", name: "Unit impulse", input: fn("delta(t)"), probe: [0.5, 1], note: "All of it at the instant $t = 0$, with area $1$. Its transform is $1$ at every $s$: no poles, and the integral converges everywhere." },
+  { id: "doublet", group: "Signals", name: "Doublet", input: fn("delta'(t)"), probe: [0.5, 1], note: "The impulse's derivative, a sharp up and down at $t = 0$. Its transform is $s$: a zero at the origin and no poles." },
 
   // ── electric circuits ──
   { id: "rc", group: "Electric circuits", name: "RC circuit, switched on", input: ode("0.5y' + y = 1", 0), note: "$y$ is the capacitor voltage, charging towards the 1 V source with time constant $RC = 0.5$ s." },
@@ -30,6 +32,7 @@ export const PRESETS = [
   { id: "rlc", group: "Electric circuits", name: "Series RLC, underdamped", input: ode("y'' + 2y' + 10y = 10", 0, 0), probe: [0.5, 2], note: "The capacitor voltage overshoots and rings before it settles on the 1 V source." },
   { id: "rlcover", group: "Electric circuits", name: "Series RLC, overdamped", input: ode("y'' + 5y' + 4y = 4", 0, 0), note: "More resistance: no ringing, two real poles at $-1$ and $-4$, and a slower rise." },
   { id: "critical", group: "Electric circuits", name: "Critically damped", input: ode("y'' + 4y' + 4y = 0", 1, 0), probe: [0, 1], note: "The boundary between ringing and sluggish: the two poles meet in a double pole at $-2$." },
+  { id: "highpass", group: "Electric circuits", name: "RC high-pass, impulse response", input: tf("s/(s + 1)"), probe: [0.5, 1], note: "The voltage across the resistor when an impulse comes in: the impulse passes straight through, then a negative tail, $-e^{-t}$, as the capacitor's charge drains away. The numerator's degree equals the denominator's, so $f(t)$ starts with $\\delta(t)$." },
 
   // ── filters and communications ──
   { id: "lowpass", group: "Filters and communications", name: "Second-order low-pass, step", input: tf("4/(s(s^2 + 1.2s + 4))"), probe: [0.5, 2], note: "The output of a low-pass filter when its input steps from 0 to 1." },
@@ -47,9 +50,11 @@ export const PRESETS = [
   { id: "double", group: "Control systems", name: "Double integrator", input: ode("y'' = 1", 0, 0), probe: [1, 1], note: "A satellite under constant thrust: position grows as $t^2/2$. Three poles stacked at the origin." },
   { id: "pendulumup", group: "Control systems", name: "Inverted pendulum, falling", input: ode("y'' - 4y = 0", 0.01, 0), tMax: 3, note: "Balanced upright and nudged. The pole at $+2$ makes the angle run away." },
   { id: "pendulumheld", group: "Control systems", name: "Inverted pendulum, held by feedback", input: ode("y'' + 3y' + 5y = 0", 0.2, 0), probe: [0.5, 2], note: "The same pendulum with a controller pushing back: both poles are now in the left half-plane." },
+  { id: "lead", group: "Control systems", name: "Lead compensator, impulse response", input: tf("(s + 1)/(s + 5)"), probe: [1, 2], note: "A controller that responds to how fast the error is changing. Equal degrees above and below the bar: an impulse goes straight through, followed by $-4e^{-5t}$." },
 
   // ── mechanics and structures ──
   { id: "spring", group: "Mechanics and structures", name: "Mass on a spring, released", input: ode("y'' + 0.4y' + 4y = 0", 1, 0), probe: [0.5, 1.5], note: "Pulled one unit and let go. Light damping: the poles are close to the imaginary axis." },
+  { id: "hammer", group: "Mechanics and structures", name: "Hammer blow on a mass on a spring", input: ode("y'' + 0.4y' + 4y = delta(t)", 0, 0), probe: [0.5, 2], note: "At rest until a blow at $t = 0$, an impulse of size $1$. The blow sets the velocity at once: $y'$ jumps from $0$ to $1$ while $y$ starts from $0$. The starting values are the ones just before the blow." },
   { id: "resonance", group: "Mechanics and structures", name: "Forced at resonance", input: ode("y'' + 4y = cos(2t)", 0, 0), probe: [0.5, 1], note: "Pushed at its own frequency, the swing grows without limit: the forcing's poles land on the system's, making double poles." },
   { id: "nearres", group: "Mechanics and structures", name: "Forced near resonance", input: ode("y'' + 25y = cos(5.6t)", 0, 0), probe: [0.5, 5], tMax: 25, note: "Just off its own frequency, the response swells and fades in beats." },
   { id: "seismo", group: "Mechanics and structures", name: "Seismometer", input: ode("y'' + y' + 9y = sin(2t)", 0, 0), probe: [0.5, 2], note: "A damped mass shaken by the ground. Its own ringing fades and the ground's motion remains." },
@@ -68,6 +73,7 @@ export const PRESETS = [
   // ── chemistry and medicine ──
   { id: "chain", group: "Chemistry and medicine", name: "Decay chain", input: ode("y' + 0.3y = e^(-t)", 0), note: "Substance A decays into B, which decays in turn. $y$ is the amount of B: it builds up, then drains away." },
   { id: "drug", group: "Chemistry and medicine", name: "Drug after an injection", input: ode("y'' + 1.3y' + 0.12y = 0", 1, -0.87), note: "Concentration in the blood (a two-compartment model): a quick fall as the drug spreads into tissue, then a slow one as it is cleared." },
+  { id: "bolus", group: "Chemistry and medicine", name: "Drug given as a bolus", input: ode("y' + 0.2y = 5delta(t)"), probe: [0.5, 1], note: "A dose of $5$ injected all at once, cleared at a rate of $0.2$ of what's left per hour. The level jumps from $0$ to $5$, then decays as $5e^{-0.2t}$." },
   { id: "pill", group: "Chemistry and medicine", name: "Drug after a tablet", input: fn("1.15(e^(-0.2t) - e^(-1.5t))"), probe: [0.5, 1], note: "Absorbed from the gut at rate $1.5$, cleared at rate $0.2$ per hour. The peak comes when the two balance." },
   { id: "glucose", group: "Chemistry and medicine", name: "Blood sugar after a meal", input: ode("y'' + 2y' + 2.6y = 0", 0, 3), probe: [0.5, 1], note: "Glucose above its resting level (Bolie's model): insulin overcorrects slightly, so it dips below before settling." },
   { id: "neuron", group: "Chemistry and medicine", name: "Nerve cell, one incoming signal", input: ode("y' + y = 4t e^(-2t)", 0), note: "The membrane voltage of a neuron, a leaky capacitor, charged by one synaptic current pulse." },

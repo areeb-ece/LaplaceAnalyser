@@ -2,15 +2,22 @@
 // poles included) and back. A transform is { num, lead, poles }:
 //   F(s) = num(s) / (lead · Π (s − p)^m),  num a complex polynomial (ascending),
 // with the denominator always kept as its roots rather than multiplied out.
+// The numerator may be of the same or higher degree: then F(s) has a polynomial part,
+// Σ d_k s^k, which is the transform of the impulses Σ d_k δ^(k)(t) at t = 0.
 import { C, add, sub, mul, div, scale, abs, conj, dist } from "./complex.js";
-import { padd, pscale, peval, fromRoots, taylor, deflate, trim } from "./poly.js";
-import { term, makeReal } from "./expoly.js";
+import { padd, pmul, pscale, peval, fromRoots, taylor, deflate, trim } from "./poly.js";
+import { term, makeReal, isImpulse } from "./expoly.js";
 
 const fact = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
 const samePole = (a, b) => dist(a, b) <= 1e-9 * (1 + abs(a));
 
-/** L{ Σ c t^n e^(λt) } = Σ c n! / (s − λ)^(n+1). The poles are the λ themselves, exactly. */
-export function transformTerms(terms) {
+/**
+ * L{ Σ c t^n e^(λt) } = Σ c n! / (s − λ)^(n+1). The poles are the λ themselves, exactly.
+ * Impulses add their polynomial, L{ c δ^(k)(t) } = c s^k, over the same denominator.
+ */
+export function transformTerms(all) {
+  const terms = all.filter((x) => !isImpulse(x)), imp = [];
+  for (const x of all) if (isImpulse(x)) imp[x.d] = add(imp[x.d] ?? C(), x.c);
   const poles = [];
   for (const x of terms) {
     const hit = poles.find((p) => samePole(p.s, x.lam));
@@ -23,7 +30,23 @@ export function transformTerms(terms) {
     const rest = poles.map((p) => ({ s: p.s, mult: p.mult - (samePole(p.s, x.lam) ? x.n + 1 : 0) }));
     num = padd(num, pscale(fromRoots(rest), scale(x.c, fact(x.n))));
   }
+  if (imp.length) num = padd(num, pmul(Array.from(imp, (c) => c ?? C()), fromRoots(poles)));
   return { num: trim(num), lead: 1, poles };
+}
+
+/**
+ * The polynomial part of F (ascending; empty when F is strictly proper): the quotient
+ * of num by lead · Π (s − p)^m. Its coefficients are the impulses' sizes.
+ */
+export function polyPart(F) {
+  const den = pscale(fromRoots(F.poles), C(F.lead, 0)), dn = den.length - 1;
+  const rem = F.num.slice(), q = [];
+  for (let k = rem.length - 1 - dn; k >= 0; k--) {
+    const c = div(rem[k + dn], den[dn]);
+    q[k] = c;
+    for (let i = 0; i <= dn; i++) rem[k + i] = sub(rem[k + i], mul(c, den[i]));
+  }
+  return q;
 }
 
 /** F at a point s. */
@@ -57,7 +80,7 @@ export function cancelCommon(F) {
 }
 
 /**
- * Partial fractions of a strictly proper F: for each pole, res[j−1] is the coefficient
+ * Partial fractions of F (its proper part, when it has a polynomial part): for each pole, res[j−1] is the coefficient
  * of 1/(s − p)^j. Around a pole p of multiplicity m, F = N(s)/Q(s) · (s − p)^(−m) with
  * Q the rest of the denominator; N and Q are re-expanded about p and their power series
  * divided, so repeated poles need no numerical differentiation.
@@ -86,7 +109,7 @@ export function inverseTerms(poles) {
 export function residuesOf(terms, poles) {
   return poles.map((p) => {
     const res = Array.from({ length: p.mult }, () => C());
-    for (const x of terms) if (samePole(x.lam, p.s) && x.n < p.mult) res[x.n] = add(res[x.n], scale(x.c, fact(x.n)));
+    for (const x of terms) if (!isImpulse(x) && samePole(x.lam, p.s) && x.n < p.mult) res[x.n] = add(res[x.n], scale(x.c, fact(x.n)));
     return { s: p.s, mult: p.mult, res };
   });
 }
