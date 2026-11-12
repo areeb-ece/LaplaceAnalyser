@@ -5,7 +5,7 @@ import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
 import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, fitWindow, drawPlane, arrow, dot, trace } from "../plot2d.js";
-import { texComplex, impTex } from "../lib/tex.js";
+import { texComplex, signalTex, single } from "../lib/tex.js";
 import { hasImpulses } from "../lib/analyse.js";
 import { probePath, indexAt } from "../probe.js";
 
@@ -31,8 +31,8 @@ export function integrandLegend(state, o) {
   const out = [{ mark: "line", role: "integrand", tint: true, tex: o.cursor ? `${name} = ${texComplex({ re: path.zr[i], im: path.zi[i] }, 3)}` : name }];
   // an impulse has no point to plot: say it is there, and what it is
   if (hasImpulses(state.model)) {
-    const imp = impTex(state.model.imp), alone = state.model.imp.filter((d) => d !== 0).length === 1;
-    out.push({ text: "Not drawn: at t = 0,", tex: alone ? `${imp}\\,e^{-st}` : `\\left(${imp}\\right) e^{-st}` });
+    const imp = signalTex(state.model.signal.filter((x) => x.d !== undefined));
+    out.push({ text: "Not drawn, the impulses:", tex: single(imp) ? `${imp}\\,e^{-st}` : `\\left(${imp}\\right) e^{-st}` });
   }
   return out;
 }

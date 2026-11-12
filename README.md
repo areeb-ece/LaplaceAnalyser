@@ -58,18 +58,18 @@ The portfolio reserves the path (`laplaceanalyser` in `reservedSlugs` in its
 | Mode | Takes | Example |
 | --- | --- | --- |
 | Equation | A linear differential equation in `y` with number coefficients, up to order 8, and its starting values | `y'' + 2y' + 5y = e^(-t) cos(2t)` |
-| Function f(t) | Sums and products of numbers, powers of `t`, exponentials, sines and cosines, and impulses at $t = 0$ | `t^2 e^(-2t) + sin(3t)`, `2delta(t) + e^(-t)` |
-| Transform F(s) | A ratio of polynomials in `s` | `(s + 3)/((s + 1)(s^2 + 4))`, `s/(s + 1)` |
+| Function f(t) | Sums and products of numbers, powers of `t`, exponentials, sines and cosines; steps and impulses at any time; and the operators `diff`, `int`, `conv` | `t^2 e^(-2t) + sin(3t)`, `u(t - 1) - u(t - 2)`, `conv(e^(-t), sin(t))` |
+| Transform F(s) | Ratios of polynomials in `s`, each times a delay factor `e^(-Ts)` if wanted | `(s + 3)/((s + 1)(s^2 + 4))`, `e^(-2s)/(s + 1)` |
 
-The **Examples** list has 67 starting points from eleven fields, each with a line on
-what it models:
+The **Examples** list has 80 starting points in twelve groups, each with a line on what
+it models: eleven fields, and one example for each property of the transform:
 
 | Field | Among the examples |
 | --- | --- |
 | Signals | step, ramp, exponentials, damped sinusoid, beats, a square wave's first harmonics, a plucked string, the unit impulse and its derivative |
-| Electric circuits | RC and RL switched on, RC with a sine source, LC, series RLC under-, over- and critically damped, an RC high-pass's impulse response |
+| Electric circuits | RC and RL switched on, RC with a sine source and with a one-second pulse, LC, series RLC under-, over- and critically damped, an RC high-pass's impulse response |
 | Filters and communications | low-pass and band-pass filters, Butterworth of order 3 and 4, an AM signal, a phase-locked loop |
-| Control systems | proportional and PI control, a DC motor, a double integrator, an inverted pendulum falling and held, a lead compensator |
+| Control systems | proportional and PI control, a DC motor, a double integrator, an inverted pendulum falling and held, a lead compensator, a process with dead time |
 | Mechanics and structures | mass on a spring, a hammer blow, resonance and near-resonance, a seismometer, coupled masses, a car suspension, a loaded beam |
 | Heat and fluids | cooling, a lagging thermometer, tanks in series, a ball with air drag, river flow after a storm |
 | Chemistry and medicine | a decay chain, drug levels after an injection, a bolus and a tablet, blood sugar, a nerve cell |
@@ -77,6 +77,7 @@ what it models:
 | Probability and queues | exponential and Erlang waiting times, two stages at different rates |
 | Economics | present value of a growing income, a business cycle |
 | Aerospace | aircraft pitch (short period and phugoid), roll rate |
+| Properties of the transform | linearity, exponential scaling, multiplication by $t$, time delay (a rectangular pulse, and $e^{-2s}$ in a transform), the derivative of a step and of a cosine, the integral of a step, convolution, partial fractions by equating coefficients |
 
 ### Typing maths
 
@@ -103,6 +104,9 @@ here. Copy and paste work on plain text in this syntax:
 | `e^(-2t)`, `exp(-2t)`, `2^t` | Exponentials. The closing bracket ends the power. |
 | `sin(3t)`, `cos(2t + pi/4)`, `sinh(t)`, `cosh(t)` | The argument must be of the form `a·t + b`. |
 | `u(t)`, `step(t)` | The unit step. Every function starts at `t = 0` anyway. |
+| `u(t - 2)`, `sin(t - 2) u(t - 2)` | A step that switches on at `t = 2`, and anything it multiplies: off before then. |
+| `e^(-2s)` | In a transform, a delay by 2. |
+| `diff(f)`, `int(f)`, `conv(f, g)` | The derivative of `f`, its running integral from `0⁻` to `t`, and the convolution of `f` and `g`. |
 | `delta(t)`, `delta'(t)`, `delta''(t)` | The unit impulse at `t = 0` and its derivatives, up to the 4th. Also `δ(t)` and `dirac(t)`; the box shows `δ`. |
 | `y'`, `y''`, `y^(4)`, `dy/dt`, `d^2y/dt^2` | Derivatives of `y`, in an equation. |
 | `1/2`, `pi`, `e`, `sqrt(2)`, `1e-6` | Numbers, anywhere a number is wanted, including starting values. |
@@ -117,9 +121,13 @@ Each of these is refused with a message that says why:
 
 - Functions whose transform isn't a ratio of polynomials: `1/t`, `sqrt(t)`, `sin(t^2)`,
   `e^(t^2)`, `tan(t)`, `ln(t)`.
-- Delayed steps `u(t - a)`, delayed impulses `delta(t - a)` and delay factors `e^(-as)`.
-- Squares and products of impulses, `delta(t)^2`, and impulses inside a function,
-  `sin(delta(t))`: none of these has a meaning.
+- Advances, which would start a signal before `t = 0`: `e^(2s)`, `1/e^(-s)`, `delta(t + 1)`.
+- Delay factors anywhere but multiplying: `1/(1 - e^(-s))` (a periodic signal),
+  `sin(e^(-s))`. And more than 6 different start times in one input.
+- Steps inside a function or a power, `sin(u(t - 1))`, and division by a step.
+- Squares and products of impulses, `delta(t)^2`, impulses inside a function,
+  `sin(delta(t))`, and a derivative of an impulse at the very instant a step switches
+  on, `u(t - 1) delta'(t - 1)`: none of these has a meaning.
 - Derivatives of the impulse beyond the 4th, typed or produced by a transform whose
   numerator's degree is more than 4 above its denominator's.
 - Non-linear and variable-coefficient equations: `y'' + y^2 = 0`, `t y' + y = 0`.
@@ -128,6 +136,37 @@ Each of these is refused with a message that says why:
 
 A transform typed directly is taken to belong to a causal signal, so its region of
 convergence is to the right of its rightmost pole.
+
+### The transform's properties
+
+Each property of the transform is something you can type, and the worked steps say
+which one is at work:
+
+| Property | Typed as | The steps show |
+| --- | --- | --- |
+| Linearity | `3delta(t) - 2e^t` | each term transformed on its own, then added: $3 - \frac{2}{s-1} = \frac{3s-5}{s-1}$ |
+| Exponential scaling | `e^(-t) cos(t)` | $\mathcal{L}\{e^{at}g(t)\} = G(s - a)$, with $G$ worked out and shifted |
+| Multiplication by $t$ | `t e^(-t)` | $\mathcal{L}\{t\,g(t)\} = -G'(s)$ |
+| Time delay | `u(t - 1) - u(t - 2)`, `e^(-2s)/(s + 1)` | $\mathcal{L}\{g(t - T)\,u(t - T)\} = e^{-sT}G(s)$, piece by piece |
+| Derivative | `diff(u(t))`, `diff(e^t)` | $\mathcal{L}\{f'\} = sF(s) - f(0^-)$, with $F$ and $f(0^-)$ filled in |
+| Integral | `int(u(t))` | $\mathcal{L}\{\int_{0^-}^t f\} = F(s)/s$ |
+| Convolution | `conv(e^(-t), sin(t))` | $\mathcal{L}\{f * g\} = F(s)\,G(s)$, then inverted |
+| Partial fractions | `(s + 1)/((s + 2)(s + 3))` | unknowns $A, B, \dots$, both sides times the denominator, the coefficients equated, the system solved |
+
+- **Time delay.** A signal is a sum of pieces, each switched on at some time $T$ and
+  written in $t - T$; its transform is $\sum_T e^{-sT} F_T(s)$. A transform typed with
+  delay factors is split the same way and each piece inverted on its own. The time plot
+  jumps where a piece switches on; the pole-zero map leaves out zeros, because a delay
+  factor gives infinitely many. A pole of one piece can cancel against another's: a
+  rectangular pulse, $\frac{e^{-s} - e^{-2s}}{s}$, has no pole at $0$, so its integral
+  converges for every $s$. The tool works this out from the pieces' residues rather
+  than taking the union of their poles.
+- **Derivative.** A plain expression such as `e^t` runs smoothly through $t = 0$, so
+  $f(0^-)$ is its value there. A step does not: $u(0^-) = 0$, and the jump becomes an
+  impulse, $u' = \delta$. Both cases are the lecture's examples.
+- **Equating coefficients** is shown when the poles are real (of any order) or simple
+  complex pairs, with 2 to 5 unknowns. The solution is the one the residues give,
+  checked against the system before it is shown.
 
 ### Impulses
 
@@ -159,7 +198,7 @@ $\delta'(t) - \delta(t) + e^{-t}$.
 | Worked steps | The transformed equation, $Y(s)$, its partial fractions and $y(t)$. |
 | Time domain | $f(t)$ or $y(t)$, with the time cursor. Click or drag to move it. |
 | S-plane surface | Height is $\lvert F(s)\rvert$, hue is $\arg F(s)$. Poles are spikes, cut at the height limit. |
-| Pole-zero map | Poles (×), zeros (○), the region where the integral converges, and the probe. |
+| Pole-zero map | Poles (×), zeros (○) unless there is a delay, the region where the integral converges, and the probe. |
 | Integrand | $f(t)e^{-st}$ traced in the complex plane up to the time cursor. |
 | Integral | $\int_{0^-}^t f(\tau)e^{-s\tau}\,d\tau$ as arrows laid tip to tail, with $F(s)$ marked. |
 | Decomposition | One phasor per pole, its residue times $e^{pt}$, summed tip to tail to give $f(t)$. |
@@ -272,7 +311,8 @@ js/lib/                 the math engine (pure: no DOM, runs in Node)
   roots.js                roots and their multiplicities
   parse.js                text → syntax tree
   field.js                the maths box's tree, every edit to it, and tree ↔ text
-  expoly.js               signals as sums of c·t^n·e^(λt)
+  expoly.js               signals as sums of c·t^n·e^(λt), steps, impulses, d/dt and ∫
+  operators.js            diff, int and conv, each with the step that names its rule
   rational.js             a typed F(s), keeping its factors
   laplace.js              transform, partial fractions, inverse
   ode.js                  equation → Y(s)
@@ -321,11 +361,14 @@ form exactly, without a computer algebra system.
    (found by long division) $\sum_k d_k s^k \mapsto \sum_k d_k\,\delta^{(k)}(t)$.
 8. **Check**: the polynomial part and the partial fractions must add back up to the
    fraction they came from, or the input is refused as too ill-conditioned to show.
+9. **Delays**: all of the above is done for each piece $e^{-sT}F_T(s)$ separately, and
+   the inverse of each piece is switched on at $T$.
 
 The integral view never uses the closed form. It integrates $f(t)e^{-st}$ by Simpson's
-rule, so its agreement with $F(s)$ is a real check. Impulses at $t = 0$ are the one
-part added by their definition, $\int \delta^{(k)}(t)\,e^{-st}\,dt = s^k$, not
-numerically.
+rule, so its agreement with $F(s)$ is a real check. Impulses are the one part added
+by their definition, $\int \delta^{(k)}(t - T)\,e^{-st}\,dt = e^{-sT}s^k$, not
+numerically. A step in which a piece switches on is split there, so the rule is never
+applied across a jump.
 
 ### One drawing function per view
 

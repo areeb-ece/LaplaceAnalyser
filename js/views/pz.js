@@ -58,9 +58,10 @@ export function paintPz(g, state, o) {
   math("s = " + texComplex(probe), px + (left ? -13 : 13), py - 16, { color: pal.probe, align: left ? "right" : "left" });
 }
 /** The key to the map's marks. */
-export const pzLegend = () => [
+export const pzLegend = (state) => [
   { mark: "cross", role: "ink", text: "Pole" },
-  { mark: "ring", role: "ink", text: "Zero" },
+  // a delay factor e^(−sT) leaves F(s) with infinitely many zeros, so none are drawn
+  state?.model?.delayed ? { text: "Zeros not drawn: with a delay there are infinitely many" } : { mark: "ring", role: "ink", text: "Zero" },
   { mark: "hatch", role: "accent", text: "Integral converges" },
 ];
 
@@ -84,7 +85,7 @@ export default {
       layer.begin();
       paintPz({ ctx, w, h: hgt, pal, math: layer.put }, store.state, { probe: true });
       layer.end();
-      legendDom(key, pzLegend(), pal);
+      legendDom(key, pzLegend(store.state), pal);
     }
 
     // ── pointer: grab the probe, or drag the plane, or click to put the probe there ──

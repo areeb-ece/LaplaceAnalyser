@@ -68,27 +68,29 @@ export function polyTex(coefs, v = "s") {
   return sum(parts);
 }
 
-const tPower = (n) => (n === 0 ? "" : n === 1 ? "t" : `t^{${n}}`);
-const kt = (k) => (mag(k) === "1" ? "" : mag(k)) + "t";
-const expo = (sigma) => (sigma === 0 ? "" : `e^{${sigma < 0 ? "-" : ""}${kt(sigma)}}`);
+// Powers and products of the time variable v: t, or (t − 2) for a piece that starts at 2.
+const tPower = (n, v = "t") => (n === 0 ? "" : n === 1 ? v : `${v}^{${n}}`);
+const kt = (k, v = "t") => (mag(k) === "1" ? "" : mag(k)) + v;
+const expo = (sigma, v = "t") => (sigma === 0 ? "" : `e^{${sigma < 0 ? "-" : ""}${kt(sigma, v)}}`);
 
-// δ(t), δ'(t), δ''(t), δ⁽³⁾(t): the unit impulse and its derivatives.
-const deltaTex = (k) => `\\delta${k === 0 ? "" : k <= 2 ? "'".repeat(k) : `^{(${k})}`}(t)`;
+// δ(t), δ'(t), δ''(t), δ⁽³⁾(t), δ(t − 2): the unit impulse and its derivatives.
+const deltaTex = (k, arg = "t") => `\\delta${k === 0 ? "" : k <= 2 ? "'".repeat(k) : `^{(${k})}`}(${arg})`;
 
 /**
  * A real signal as a sum of impulses at t = 0, then t^n e^(σt) cos(ωt) and sin(ωt).
  * The impulses are the terms of the list that are impulses, and imp[k], the size of
  * δ^(k)(t), when given.
  */
-export function timeTex(terms, imp = []) {
-  const parts = [];
-  imp.forEach((d, k) => { if (d) parts.push({ k: d, body: deltaTex(k) }); });
+export function timeTex(terms, imp = [], v = "t") {
+  const parts = [], arg = v === "t" ? "t" : v.slice(1, -1);
+  imp.forEach((d, k) => { if (d) parts.push({ k: d, body: deltaTex(k, arg) }); });
   for (const x of terms) {
-    if (x.d !== undefined) { parts.push({ k: x.c.re, body: deltaTex(x.d) }); continue; }
+    if (x.d !== undefined) { parts.push({ k: x.c.re, body: deltaTex(x.d, arg) }); continue; }
     if (x.lam.im < 0) continue; // counted with its conjugate
-    const head = [tPower(x.n), expo(x.lam.re)].filter(Boolean).join("\\,");
+    const head = [tPower(x.n, v), expo(x.lam.re, v)].filter(Boolean).join("\\,");
     if (x.lam.im === 0) { parts.push({ k: x.c.re, body: head }); continue; }
-    const w = kt(x.lam.im), join = head ? head + "\\," : "";
+    // inside the brackets of cos and sin, t − 2 needs no brackets of its own
+    const w0 = kt(x.lam.im, v), w = w0 === v && v.startsWith("(") ? v.slice(1, -1) : w0, join = head ? head + "\\," : "";
     parts.push({ k: 2 * x.c.re, body: `${join}\\cos(${w})` });
     parts.push({ k: -2 * x.c.im, body: `${join}\\sin(${w})` });
   }
@@ -121,8 +123,128 @@ export function fractionTex(numReal, lead, poles) {
   return poles.length ? `\\frac{${top}}{${denTex(poles)}}` : top;
 }
 
-/** The impulses alone, Σ imp[k] δ^(k)(t) (for labels on the plots). */
-export const impTex = (imp) => timeTex([], imp);
+/** The impulses alone, Σ imp[k] δ^(k)(t − T) (for labels on the plots). */
+export const impTex = (imp, T = 0) => timeTex([], imp, T ? `(t - ${mag(T)})` : "t");
+
+// Joins pieces that may each start with a minus sign.
+const joinSigned = (pieces) => pieces.filter((p) => p && p !== "0").map((p, i) => (i === 0 ? p : p.startsWith("-") ? ` - ${p.slice(1)}` : ` + ${p}`)).join("") || "0";
+// Does this sum have more than one term at the top level (outside every brace)?
+function several(tex) {
+  let depth = 0;
+  for (let i = 1; i < tex.length; i++) {
+    const c = tex[i];
+    if (c === "{" || c === "(") depth++;
+    else if (c === "}" || c === ")") depth--;
+    else if (depth === 0 && (c === "+" || c === "-") && tex[i - 1] === " ") return true;
+  }
+  return false;
+}
+/** Is this a single term (no + or − outside brackets)? */
+export const single = (tex) => !several(tex);
+const stepTex = (T) => `u(${T ? `t - ${mag(T)}` : "t"})`;
+const delayTex = (T) => `e^{-${mag(T) === "1" ? "" : mag(T)}s}`;
+
+/**
+ * A whole signal, steps and delays included: the plain part first, then each piece that
+ * a step switches on, written in t − T and multiplied by u(t − T).
+ */
+export function signalTex(signal) {
+  const plain = signal.filter((x) => x.on === undefined), pieces = [timeTex(plain)];
+  const starts = [...new Set(signal.filter((x) => x.on !== undefined).map((x) => x.on))].sort((a, b) => a - b);
+  for (const T of starts) {
+    const here = signal.filter((x) => x.on === T), v = T ? `(t - ${mag(T)})` : "t";
+    const imps = here.filter((x) => x.d !== undefined), terms = here.filter((x) => x.d === undefined);
+    if (imps.length) pieces.push(timeTex(imps, [], v));
+    if (!terms.length) continue;
+    const body = timeTex(terms, [], v);
+    if (body === "1") pieces.push(stepTex(T));
+    else if (body === "-1") pieces.push("-" + stepTex(T));
+    else if (several(body)) pieces.push(`\\left[${body}\\right]${stepTex(T)}`);
+    else pieces.push(`${body}\\,${stepTex(T)}`);
+  }
+  return joinSigned(pieces);
+}
+
+/**
+ * A transform made of delayed pieces, Σ e^(−sT) N_T(s) / D_T(s), each as one fraction
+ * with its delay in the numerator: groups [{ T, num (real), lead, poles }].
+ */
+export function delayedTex(groups) {
+  return joinSigned(groups.map((g) => {
+    const top = g.num.findLast((x) => x !== 0) ?? 0, minus = top / g.lead < 0;
+    const N = polyTex((minus ? g.num.map((x) => -x) : g.num).map((x) => x / g.lead));
+    const lifted = !g.T ? N : N === "1" ? delayTex(g.T) : several(N) ? `\\left(${N}\\right)${delayTex(g.T)}` : `${N}\\,${delayTex(g.T)}`;
+    return (minus ? "-" : "") + (g.poles.length ? `\\frac{${lifted}}{${denTex(g.poles)}}` : lifted);
+  }));
+}
+/** The same, each piece as its polynomial part and partial fractions: groups [{ T, imp, poles }]. */
+export function delayedPartsTex(groups) {
+  return joinSigned(groups.map((g) => {
+    const parts = partsTex(g.imp, g.poles);
+    if (!g.T) return parts;
+    if (parts === "1" || parts === "-1") return (parts === "-1" ? "-" : "") + delayTex(g.T);
+    if (several(parts)) return `${delayTex(g.T)}\\left(${parts}\\right)`;
+    return parts.startsWith("-") ? `-${delayTex(g.T)}\\,${parts.slice(1)}` : `${delayTex(g.T)}\\,${parts}`;
+  }));
+}
+
+/**
+ * Partial fractions the way they are done by hand: one unknown per term, both sides
+ * multiplied by the denominator, coefficients of each power of s equated, and the
+ * system's solution. For a proper N/(lead · Π (s − p)^m) whose poles are real (any
+ * multiplicity) or simple complex pairs, with 2 to 5 unknowns; otherwise null.
+ * The solution comes from the poles' residues, and is checked against the system.
+ */
+export function equateTex(rest, lead, poles) {
+  const top = poles.filter((p) => p.s.im >= 0);
+  if (top.some((p) => p.s.im > 0 && p.mult > 1)) return null;
+  const rmul = (a, b) => { const o = new Array(a.length + b.length - 1).fill(0); a.forEach((x, i) => b.forEach((y, j) => { o[i + j] += x * y; })); return o; };
+  const rpow = (a, k) => { let r = [1]; for (let i = 0; i < k; i++) r = rmul(r, a); return r; };
+  const fs = factors(poles).map((f, i) => ({ ...f, poly: top[i].s.im === 0 ? [-top[i].s.re, 1] : [top[i].s.re ** 2 + top[i].s.im ** 2, -2 * top[i].s.re, 1], p: top[i] }));
+  // the factors other than f, and f to the power left over, as a polynomial and as TeX
+  const rest_ = (f, keep) => {
+    const list = fs.map((g) => (g === f ? { ...g, pow: keep } : g)).filter((g) => g.pow > 0);
+    return { poly: list.reduce((a, g) => rmul(a, rpow(g.poly, g.pow)), [1]), tex: list.map((g) => (g.atom ? g.inner : `(${g.inner})`) + (g.pow > 1 ? `^{${g.pow}}` : "")).join("") };
+  };
+  const names = "ABCDEFG", unknowns = [];
+  for (const f of fs) {
+    const p = f.p;
+    if (p.s.im === 0) {
+      for (let j = 1; j <= f.pow; j++) {
+        const name = names[unknowns.length], other = rest_(f, f.pow - j);
+        unknowns.push({ name, value: p.res[j - 1].re, basis: other.poly, frac: `\\frac{${name}}{${product([{ ...f, pow: j }])}}`, times: name + other.tex });
+      }
+    } else {
+      const B = names[unknowns.length], Cn = names[unknowns.length + 1], other = rest_(f, 0), A = p.res[0];
+      const pair = `${B}s + ${Cn}`, frac = `\\frac{${pair}}{${f.inner}}`, times = `(${pair})${other.tex}`;
+      unknowns.push({ name: B, value: 2 * A.re, basis: rmul(other.poly, [0, 1]), frac, times, pair: true });
+      unknowns.push({ name: Cn, value: -2 * mul(A, conj(p.s)).re, basis: other.poly, skip: true });
+    }
+  }
+  if (unknowns.length < 2 || unknowns.length > 5) return null;
+  const deg = unknowns[0].basis.length, N = Array.from({ length: deg }, (_, k) => (rest[k] ?? 0) / lead);
+  // the solution must satisfy the system it is shown with
+  const big = Math.max(1, ...N.map(Math.abs));
+  for (let k = 0; k < deg; k++) {
+    const lhs = unknowns.reduce((sum, u) => sum + u.value * (u.basis[k] ?? 0), 0);
+    if (Math.abs(lhs - N[k]) > 1e-8 * big) return null;
+  }
+  const shown = unknowns.filter((u) => !u.skip);
+  const rows = [];
+  for (let k = deg - 1; k >= 0; k--) {
+    const left = sum(unknowns.map((u) => ({ k: u.basis[k] ?? 0, body: u.name })));
+    if (left !== "0") rows.push(`${left} &= ${num(N[k])}`);
+  }
+  const solved = unknowns.map((u) => `${u.name} = ${num(Math.abs(u.value) < 1e-10 * big ? 0 : u.value)}`).join(",\\quad ");
+  return [
+    `\\begin{aligned}`,
+    `\\frac{${polyTex(N)}}{${denTex(poles)}} &= ${shown.map((u) => u.frac).join(" + ")}\\\\`,
+    `${polyTex(N)} &= ${shown.map((u) => u.times).join(" + ")}\\\\`,
+    `&\\left\\{\\begin{aligned}${rows.join("\\\\")}\\end{aligned}\\right.\\\\`,
+    `&${solved}`,
+    `\\end{aligned}`,
+  ].join("");
+}
 
 /** A polynomial part (the impulses' transform) and then the partial fractions. */
 export function partsTex(imp, poles) {
@@ -166,7 +288,7 @@ const yTex = (k, arg = "") => (k <= 3 ? "y" + "'".repeat(k) : `y^{(${k})}`) + ar
 export function odeTex(coefs, forcing) {
   const parts = [];
   for (let k = coefs.length - 1; k >= 0; k--) parts.push({ k: coefs[k], body: yTex(k) });
-  return `${sum(parts)} = ${timeTex(forcing)}`;
+  return `${sum(parts)} = ${signalTex(forcing)}`;
 }
 /** y(0) = …, y'(0) = …; at 0⁻ (just before an impulse) when before is set. */
 export const icsTex = (ics, before = false) => ics.map((v, k) => `${yTex(k, before ? "(0^-)" : "(0)")} = ${num(v)}`).join(",\\quad ");
@@ -207,6 +329,9 @@ export function astTex(n) {
       if (n.fn === "exp") return `e^{${astTex(n.arg)}}`;
       if (n.fn === "u") return `u(${astTex(n.arg)})`;
       if (n.fn === "delta") return `\\delta${n.order <= 2 ? "'".repeat(n.order) : `^{(${n.order})}`}\\left(${astTex(n.arg)}\\right)`;
+      if (n.fn === "diff") return `\\frac{d}{dt}\\left[${astTex(n.arg)}\\right]`;
+      if (n.fn === "int") return `\\int_{0^-}^{t}\\left[${astTex(n.arg).replace(/(?<![a-z\\])t(?![a-z])/g, "\\tau")}\\right]d\\tau`;
+      if (n.fn === "conv") return `\\left(${astTex(n.arg)}\\right) * \\left(${astTex(n.arg2)}\\right)`;
       return `\\${n.fn}\\left(${astTex(n.arg)}\\right)`;
     case "bin": {
       const { a, b } = n;

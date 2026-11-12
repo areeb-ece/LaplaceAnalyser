@@ -117,6 +117,7 @@ export function toText(r) {
       if (kind[k] === "rel" || (kind[k] === "bin" && it.c !== "*")) out += ` ${it.c} `;
       else if (it.c === "π") out += /[a-z]$/.test(out) ? " pi" : "pi";
       else if (it.c === "δ") out += /[a-z]$/.test(out) ? " delta" : "delta";
+      else if (it.c === ",") out += ", ";
       else out += it.c;
     } else if (it.k === "sup") {
       const text = toText(it.body);

@@ -11,8 +11,8 @@ export class InputError extends Error {
   constructor(message) { super(message); this.name = "InputError"; }
 }
 
-export const WORDS = ["delta", "dirac", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "pi", "t", "s", "y", "u", "e"];
-export const FUNCS = new Set(["delta", "dirac", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
+export const WORDS = ["delta", "dirac", "diff", "conv", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "int", "pi", "t", "s", "y", "u", "e"];
+export const FUNCS = new Set(["delta", "dirac", "diff", "conv", "int", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
 const SUPER = { "²": "^2", "³": "^3", "⁴": "^4" };
 
 function clean(src) {
@@ -41,14 +41,14 @@ function tokenize(src) {
       const word = WORDS.find((w) => text.startsWith(w, i));
       if (!word) {
         const run = /^[a-z]+/.exec(text.slice(i))[0];
-        throw new InputError(`I don't know what "${run}" means here. The names I know are t, s, y, e, pi, sin, cos, exp, sinh, cosh, sqrt, u (the unit step) and delta (the unit impulse).`);
+        throw new InputError(`I don't know what "${run}" means here. The names I know are t, s, y, e, pi, sin, cos, exp, sinh, cosh, sqrt, u (the unit step), delta (the unit impulse), and the operators diff, int and conv.`);
       }
       out.push({ type: "name", v: word, text: word, space });
       i += word.length;
       continue;
     }
     if (ch === "□") throw new InputError("One of the boxes is still empty. Type something in it, or remove it with Backspace.");
-    if ("+-*/^()='".includes(ch)) { out.push({ type: ch, text: ch, space }); i++; continue; }
+    if ("+-*/^()=',".includes(ch)) { out.push({ type: ch, text: ch, space }); i++; continue; }
     throw new InputError(`I can't read the character "${ch}".`);
   }
   return out;
@@ -147,9 +147,17 @@ class Parser {
         this.next();
         if (this.is(")")) throw new InputError(`${tok.v}() needs something inside its brackets.`);
         const arg = this.expr();
+        // conv(f, g) takes two signals
+        let arg2 = null;
+        if (tok.v === "conv") {
+          if (!this.is(",")) throw new InputError("conv takes two signals, separated by a comma: conv(e^(-t), sin(t)).");
+          this.next();
+          arg2 = this.expr();
+        } else if (this.is(",")) throw new InputError(`${tok.v}(…) takes one thing; only conv(f, g) takes two, separated by a comma.`);
         if (!this.is(")")) throw new InputError(`The bracket after ${tok.v} is never closed.`);
         this.next();
         if (impulse) return { t: "call", fn: "delta", arg, order };
+        if (arg2) return { t: "call", fn: tok.v, arg, arg2 };
         return { t: "call", fn: tok.v === "step" ? "u" : tok.v, arg };
       }
       return { t: "var", name: tok.v };
@@ -157,6 +165,7 @@ class Parser {
     if (tok.type === ")") throw new InputError("There's a closing bracket with no opening one.");
     if (tok.type === "'") throw new InputError("A prime (') can only follow y or delta, as in y'' or delta'(t).");
     if (tok.type === "=") throw new InputError("There's an = sign where I expected a value.");
+    if (tok.type === ",") throw new InputError("A comma only separates the two signals in conv(f, g).");
     throw new InputError(`"${tok.text}" is in a place where I expected a number, a name or a bracket.`);
   }
 }
@@ -167,6 +176,7 @@ function finish(p, what) {
   if (tok.type === ")") throw new InputError("There's a closing bracket with no opening one.");
   if (tok.type === "'") throw new InputError("A prime (') can only follow y or delta, as in y'' or delta'(t).");
   if (tok.type === "=") throw new InputError(what === "equation" ? "There's more than one = sign." : "This box takes an expression, not an equation: leave out the = sign.");
+  if (tok.type === ",") throw new InputError("A comma only separates the two signals in conv(f, g).");
   throw new InputError(`I didn't expect "${tok.text}" there.`);
 }
 
@@ -200,7 +210,7 @@ export function parseEquation(src) {
 export function hasY(n) {
   if (n.t === "y") return true;
   if (n.t === "neg") return hasY(n.a);
-  if (n.t === "call") return hasY(n.arg);
+  if (n.t === "call") return hasY(n.arg) || (!!n.arg2 && hasY(n.arg2));
   if (n.t === "bin") return hasY(n.a) || hasY(n.b);
   return false;
 }

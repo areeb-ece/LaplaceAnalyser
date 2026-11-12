@@ -111,7 +111,7 @@ work to match the family).
 - Mode C assumes a causal signal, so the region of convergence is right of the
   rightmost pole.
 - Denominator degree is capped at 12 (ODE order up to 6, comfortably above the required 4).
-- Delayed steps $u(t-a)$ stay a stretch goal, attempted after milestone f.
+- Delayed steps $u(t-a)$ stayed a stretch goal at first; they were added later (section 18).
 
 ### D5. Name and address (decided: Laplace Analyser)
 
@@ -342,8 +342,8 @@ One role, one token, in every view:
   the fraction they came from; if they don't (poles too close to separate accurately),
   the input is refused.
 - **Three.js 0.183.0**, the newest release that ships a minified module build.
-- **Not done: delayed steps** `u(t - a)`, the stretch goal. They are refused with a
-  message. The surface shader assumes a ratio of polynomials, which a delay isn't.
+- **Not done at first: delayed steps** `u(t - a)`, the stretch goal. They were refused with
+  a message until section 18 added them.
 - **No worker was needed.** The surface's heights are computed on the GPU.
 
 ## 15. After the first release
@@ -421,3 +421,40 @@ Added at areeb's request: Dirac delta functions in every mode.
 - **Six examples** that are impulses in their fields: the unit impulse and the doublet,
   an RC high-pass's impulse response, a lead compensator, a hammer blow on a mass on a
   spring, and a drug given as a bolus.
+
+## 18. The lecture's properties
+
+Added at areeb's request, from his lecture on the properties of the transform and
+partial fractions:
+
+- **Time delay** (the old stretch goal). Every signal term carries the time it starts:
+  absent for a plain expression, $T$ for one switched on by $u(t - T)$, written in
+  $t - T$. Products of a step and anything else re-express both from the later start
+  (binomial expansion of $(\tau + \Delta)^n$), so `t u(t - 1)` is exactly
+  $[(t-1) + 1]\,u(t-1)$. Impulses carry their time too. A transform becomes
+  $\sum_T e^{-sT}F_T(s)$, and every piece goes through the existing pipeline on its own.
+- **Poles of the whole.** The pieces' poles are merged, and each one's principal part
+  in $F$ as a whole is computed from the pieces' residues and the Taylor series of
+  $e^{-sT}$ at the pole. A pole whose principal part vanishes is dropped, so a pulse
+  has none and converges everywhere. The region of convergence uses these.
+- **Views with delays.** The numerical integral splits a step at each switch-on time and
+  adds each impulse's $e^{-sT}\sum d_k s^k$ there; the time plot draws the jump; the
+  decomposition sums each piece's phasors while it is on; the surface shader gets a
+  second path that evaluates $\sum_g e^{-sT_g}N_g(s)$ over a common denominator, scaled
+  so $e^{-\sigma T}$ can't overflow; the pole-zero map leaves out zeros and says why.
+- **Operators**: `diff(f)`, `int(f)` and `conv(f, g)`. The derivative and the integral
+  are done in time, in closed form, with steps' jumps becoming impulses (so
+  $\frac{d}{dt}u = \delta$ but $\frac{d}{dt}e^t = e^t$, the lecture's two cases of
+  $sF(s) - f(0^-)$). The convolution multiplies the transforms and inverts the product.
+  Each records a worked step that names the rule and fills it in.
+- **Properties shown in the steps**: exponential scaling and multiplication by $t$ are
+  recognised when the input is written as such a product; linearity is named in the
+  term-by-term step.
+- **Partial fractions by equating coefficients**, the lecture's method, shown as a step
+  for small systems (2 to 5 unknowns; real poles, or simple complex pairs). The solution
+  comes from the residues and is checked against the system before it is shown.
+- **Thirteen examples**: one for each property, and two delays from engineering.
+- One slip in the lecture: the general formula on slide 3-28 should read
+  $\mathcal{L}\{t^k e^{-t}\} = \frac{k!}{(s+1)^{k+1}}$, not $(k-1)!$ (its own two
+  examples, $k = 1, 2$, agree with $k!$). The tool uses $k!$.
+

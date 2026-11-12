@@ -14,12 +14,12 @@ const KEY = {
   d1: ["y'", "First derivative", "y'"], d2: ["y''", "Second derivative", "y''"],
   frac: ["\\tfrac{a}{b}", "Fraction", "/"], pow: ["a^b", "Power", "^"], exp: ["e^{a}", "Exponential", "e^"],
   sin: ["\\sin", "Sine", "sin("], cos: ["\\cos", "Cosine", "cos("], root: ["\\sqrt{a}", "Square root", "sqrt"], pi: ["\\pi", "Pi", "pi"],
-  imp: ["\\delta", "Unit impulse", "delta("],
+  imp: ["\\delta", "Unit impulse", "delta("], step: ["u", "Unit step", "u(t"], delay: ["e^{-s}", "Delay factor", "e^-"],
 };
 const MODES = [
-  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", keys: ["d1", "d2", "frac", "pow", "exp", "sin", "cos", "imp"], hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"], ", or with a blow at ", m("t = 0"), " on the right, ", ["delta(t)"]] },
-  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", keys: ["frac", "pow", "exp", "sin", "cos", "root", "pi", "imp"], hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"], ". An impulse at ", m("t = 0"), " is ", ["delta(t)"]] },
-  { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", keys: ["frac", "pow", "root", "pi"], hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"]] },
+  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", keys: ["d1", "d2", "frac", "pow", "exp", "sin", "cos", "imp", "step"], hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"], ". On the right, ", ["delta(t)"], " is a blow at ", m("t = 0"), " and ", ["u(t - 2)"], " a step at ", m("t = 2")] },
+  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", keys: ["frac", "pow", "exp", "sin", "cos", "root", "pi", "imp", "step"], hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"], ". An impulse at ", m("t = 0"), " is ", ["delta(t)"], ", a step at ", m("t = 2"), " is ", ["u(t - 2)"], ", and ", ["diff(f)"], ", ", ["int(f)"], ", ", ["conv(f, g)"], " apply the rules"] },
+  { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", keys: ["frac", "pow", "root", "pi", "delay"], hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"], ". A delay by ", m("2"), " is a factor ", ["e^(-2s)"]] },
 ];
 // How the box behaves, said once under every mode's own hint.
 const HOW = [["/"], " starts a fraction and ", ["^"], " a power; ", ["Space"], " or ", ["→"], " steps out of one."];

@@ -4,6 +4,8 @@
 // The mesh is a fixed grid. Its height and colour are worked out on the GPU from the
 // poles, zeros and gain, so a new equation only changes a few uniforms and nothing is
 // rebuilt: log|F| = log|K| + Σ log|s − z| − Σ log|s − p|, and likewise for the phase.
+// A transform with delays, Σ e^(−sT) N_T(s) / D(s), has no finite list of zeros: then the
+// numerators' coefficients are uniforms too, and the sum is worked out at each point.
 // The frame is redrawn only when something changed.
 import { h } from "../ui.js";
 import { palette } from "../palette.js";
@@ -16,6 +18,8 @@ import { texComplex } from "../lib/tex.js";
 const N = 320;        // grid cells along each side
 const HEIGHT = 0.95;  // world height of the limit (the plane is the square [-1, 1]²)
 const MAX = 12;       // poles, and zeros, the shader has room for
+const GROUPS = 6;     // delayed pieces the shader has room for (the engine's limit)
+const COEFS = 20;     // coefficients per piece's numerator (degree ≤ 16), five vec4s
 const RIM = 0.45;     // how far past the limit (in ln|F|) the flat rim of a cut spike reaches
 const DECADES = 3;    // what the log scale spans below the limit
 const SAMPLE_T = 6;   // seconds of e^(st) drawn in each sample
@@ -24,8 +28,36 @@ const HOME = { az: -0.36, pol: 1.0, dist: 4.3 };
 const COMMON = `
 uniform vec3 uWin; uniform vec3 uPoles[${MAX}]; uniform vec3 uZeros[${MAX}]; uniform int uNp; uniform int uNz;
 uniform float uLogK; uniform float uTop; uniform float uFloor; uniform float uLogMode; uniform float uH;
+uniform int uNg; uniform float uGT[${GROUPS}]; uniform float uGD[${GROUPS}]; uniform vec4 uGC[${(GROUPS * COEFS) / 4}];
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
+// Σ_g e^(−sT_g) N_g(s), scaled: returns the sum divided by e^big, and big, so that neither
+// e^(−σT) nor a high power of s can overflow.
+vec2 delayedSum(vec2 s, out float big) {
+  vec2 val[${GROUPS}]; float lg[${GROUPS}];
+  big = -1e30;
+  for (int g = 0; g < ${GROUPS}; g++) {
+    if (g >= uNg) break;
+    vec2 p = vec2(0.0);
+    for (int k = ${COEFS - 1}; k >= 0; k--) {
+      if (float(k) > uGD[g]) continue;
+      int i = g * ${COEFS} + k;
+      p = cmul(p, s) + vec2(uGC[i / 4][i - (i / 4) * 4], 0.0);
+    }
+    float ang = -s.y * uGT[g], m = length(p);
+    val[g] = m > 0.0 ? cmul(p / m, vec2(cos(ang), sin(ang))) : vec2(0.0);
+    lg[g] = log(max(m, 1e-30)) - s.x * uGT[g];
+    big = max(big, lg[g]);
+  }
+  vec2 sum = vec2(0.0);
+  for (int g = 0; g < ${GROUPS}; g++) { if (g >= uNg) break; sum += val[g] * exp(lg[g] - big); }
+  return sum;
+}
+// with delays, nudge off the grid by a hair: a pole that the pieces cancel is 0/0 exactly on it
+vec2 off(vec2 s) { return uNg > 0 ? s + uWin.z * vec2(1.3e-4, 0.7e-4) : s; }
 float logMag(vec2 s) {
+  s = off(s);
   float l = uLogK;
+  if (uNg > 0) { float big; vec2 v = delayedSum(s, big); l = big + log(max(length(v), 1e-30)); }
   for (int i = 0; i < ${MAX}; i++) { if (i >= uNz) break; vec2 d = s - uZeros[i].xy; l += uZeros[i].z * 0.5 * log(max(dot(d, d), 1e-30)); }
   for (int i = 0; i < ${MAX}; i++) { if (i >= uNp) break; vec2 d = s - uPoles[i].xy; l -= uPoles[i].z * 0.5 * log(max(dot(d, d), 1e-30)); }
   return l;
@@ -50,7 +82,9 @@ const FRAG = `${COMMON}
 uniform float uSignK; uniform float uStep; uniform vec3 uInk; uniform float uSat; uniform float uLight; uniform vec3 uSun;
 varying vec2 vS; varying vec3 vN;
 float phase(vec2 s) {
+  s = off(s);
   float a = uSignK < 0.0 ? 3.14159265 : 0.0;
+  if (uNg > 0) { float big; vec2 v = delayedSum(s, big); a = atan(v.y, v.x); }
   for (int i = 0; i < ${MAX}; i++) { if (i >= uNz) break; vec2 d = s - uZeros[i].xy; a += uZeros[i].z * atan(d.y, d.x); }
   for (int i = 0; i < ${MAX}; i++) { if (i >= uNp) break; vec2 d = s - uPoles[i].xy; a -= uPoles[i].z * atan(d.y, d.x); }
   return a;
@@ -77,6 +111,20 @@ void main() {
 }`;
 
 /** What the colour means. */
+// A piece's numerator over the common denominator of all the pieces: N_T(s) / lead_T
+// times every pole's factor that the piece itself doesn't have. Real, ascending.
+function liftOnto(g, all) {
+  let p = g.num.map((x) => x / g.lead);
+  const mul = (a, b) => { const o = new Array(a.length + b.length - 1).fill(0); a.forEach((x, i) => b.forEach((y, j) => { o[i + j] += x * y; })); return o; };
+  for (const q of all) {
+    if (q.s.im < 0) continue;
+    const own = g.poles.find((o) => Math.abs(o.s.re - q.s.re) + Math.abs(o.s.im - q.s.im) <= 1e-9 * (1 + Math.hypot(q.s.re, q.s.im)))?.mult ?? 0;
+    const factor = q.s.im === 0 ? [-q.s.re, 1] : [q.s.re ** 2 + q.s.im ** 2, -2 * q.s.re, 1];
+    for (let k = own; k < q.mult; k++) p = mul(p, factor);
+  }
+  return p;
+}
+
 export const surfaceLegend = () => [{ mark: "phase", role: "ink", text: "Phase,", tex: "-\\pi \\text{ to } \\pi" }];
 
 export default {
@@ -128,6 +176,7 @@ export default {
     }
     function logMagAt(s) {
       const { model } = store.state;
+      if (model.delayed) { const F = evalTransformAt(model, s); return Math.log(Math.max(Math.hypot(F.re, F.im), 1e-300)); }
       let l = Math.log(Math.abs(model.num[model.num.length - 1] / model.lead));
       for (const z of model.zeros) l += z.mult * 0.5 * Math.log(Math.max((s.re - z.s.re) ** 2 + (s.im - z.s.im) ** 2, 1e-30));
       for (const p of model.poles) l -= p.mult * 0.5 * Math.log(Math.max((s.re - p.s.re) ** 2 + (s.im - p.s.im) ** 2, 1e-30));
@@ -164,6 +213,8 @@ export default {
       geo.setIndex(new T.BufferAttribute(index, 1));
       R.uniforms = {
         uWin: { value: new T.Vector3() }, uNp: { value: 0 }, uNz: { value: 0 },
+        uNg: { value: 0 }, uGT: { value: new Array(GROUPS).fill(0) }, uGD: { value: new Array(GROUPS).fill(0) },
+        uGC: { value: Array.from({ length: (GROUPS * COEFS) / 4 }, () => new T.Vector4()) },
         uPoles: { value: Array.from({ length: MAX }, () => new T.Vector3()) }, uZeros: { value: Array.from({ length: MAX }, () => new T.Vector3()) },
         uLogK: { value: 0 }, uSignK: { value: 1 }, uTop: { value: 0 }, uFloor: { value: -1 }, uLogMode: { value: 0 }, uH: { value: HEIGHT },
         uStep: { value: 1 }, uInk: { value: new T.Vector3(1, 1, 1) }, uSat: { value: 0.7 }, uLight: { value: 0.55 }, uSun: { value: new T.Vector3(-0.35, 0.8, 0.5).normalize() },
@@ -209,13 +260,28 @@ export default {
       const { model, win, opts } = store.state, u = R.uniforms;
       const top = topOf();
       u.uWin.value.set(win.cx, win.cy, win.half);
-      model.poles.slice(0, MAX).forEach((p, i) => u.uPoles.value[i].set(p.s.re, p.s.im, p.mult));
+      // with delays: every pole of every piece over one common denominator, and each piece's
+      // numerator lifted onto it, N_T · D / D_T
+      const poles = model.delayed ? model.allPoles : model.poles;
+      poles.slice(0, MAX).forEach((p, i) => u.uPoles.value[i].set(p.s.re, p.s.im, p.mult));
       model.zeros.slice(0, MAX).forEach((z, i) => u.uZeros.value[i].set(z.s.re, z.s.im, z.mult));
-      u.uNp.value = Math.min(MAX, model.poles.length);
+      u.uNp.value = Math.min(MAX, poles.length);
       u.uNz.value = Math.min(MAX, model.zeros.length);
-      const K = model.num[model.num.length - 1] / model.lead;
-      u.uLogK.value = Math.log(Math.abs(K));
-      u.uSignK.value = K < 0 ? -1 : 1;
+      u.uNg.value = model.delayed ? Math.min(GROUPS, model.groups.length) : 0;
+      if (model.delayed) {
+        model.groups.slice(0, GROUPS).forEach((g, gi) => {
+          const lifted = liftOnto(g, model.allPoles);
+          u.uGT.value[gi] = g.T;
+          u.uGD.value[gi] = Math.min(COEFS, lifted.length) - 1;
+          for (let k = 0; k < COEFS; k++) { const i = gi * COEFS + k; u.uGC.value[i >> 2].setComponent(i & 3, lifted[k] ?? 0); }
+        });
+        u.uLogK.value = 0;
+        u.uSignK.value = 1;
+      } else {
+        const K = model.num[model.num.length - 1] / model.lead;
+        u.uLogK.value = Math.log(Math.abs(K));
+        u.uSignK.value = K < 0 ? -1 : 1;
+      }
       u.uTop.value = top;
       u.uFloor.value = top - DECADES * Math.LN10;
       u.uLogMode.value = opts.log ? 1 : 0;
