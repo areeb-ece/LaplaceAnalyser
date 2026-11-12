@@ -18,13 +18,12 @@ test("impulses that can't be handled", () => {
   refuse(fn("sin(delta(t))"), /can't go inside sin/);
   refuse(fn("e^(delta(t))"), /can't go in a power/);
   refuse(fn("1/delta(t)"), /Dividing by an impulse/);
-  refuse(fn("delta(t - 2)"), /impulse at t = 2, a delayed one/);
   refuse(fn("delta(t + 1)"), /before the transform starts/);
   refuse(fn("delta(3)"), /has to be t/);
   refuse(fn("delta'''''(t)"), /too high an order/);
   refuse(fn("delta"), /in brackets/);
   refuse(ode("y'' + delta(t) y = 0"), /plain numbers/);
-  refuse(ode("y'' + y = delta(t - 1)"), /delayed/);
+  refuse(fn("u(t - 1) delta'(t - 1)"), /same instant/);
 });
 
 test("functions outside the supported family", () => {
@@ -36,7 +35,14 @@ test("functions outside the supported family", () => {
   refuse(fn("t^0.5"), /whole numbers/);
   refuse(fn("tan(t)"), /don't know what "an"|don't know what/);
   refuse(fn("ln(t)"), /don't know what "ln"/);
-  refuse(fn("u(t-2)"), /delayed step/i);
+  refuse(fn("u(-t)"), /switch on as time goes forward/);
+  refuse(fn("sin(u(t - 1))"), /step can't go inside sin/);
+  refuse(fn("1/u(t - 1)"), /Dividing by a step/);
+  refuse(fn("e^(u(t))"), /step can't go in a power/);
+  refuse(fn("conv(e^(-t))"), /two signals, separated by a comma/);
+  refuse(fn("diff(t, t)"), /takes one thing/);
+  refuse(fn("1, 2"), /comma only separates/);
+  refuse(fn("u(t) + u(t - 1) + u(t - 2) + u(t - 3) + u(t - 4) + u(t - 5) + u(t - 6)"), /up to 6/);
   refuse(fn("s + 1"), /s is the transform's variable/);
   refuse(fn("y' + y"), /belongs in a differential equation/);
   refuse(fn("0"), /zero function/);
@@ -75,8 +81,11 @@ test("the readings that are unambiguous are accepted", () => {
 test("transforms that aren't rational functions, or need too high a derivative of δ", () => {
   refuse(rat("s^6/(s+1)"), /5th derivative of an impulse/);
   refuse(rat("s^5"), /5th derivative of an impulse/);
-  refuse(rat("e^(-2s)/s"), /delay factor/);
-  refuse(rat("exp(-s)/(s+1)"), /delay factor/);
+  refuse(rat("e^(2s)/s"), /earlier, before t = 0/);
+  refuse(rat("1/e^(-s)"), /would be an advance/);
+  refuse(rat("1/(1 - e^(-s))"), /Delay factors can only multiply/);
+  refuse(rat("e^(s^2)"), /a number times s/);
+  refuse(rat("sin(e^(-s))"), /can only multiply the rest/);
   refuse(rat("1/sqrt(s)"), /ratio of polynomials/);
   refuse(rat("1/s^0.5"), /whole number/);
   refuse(rat("1/(t+1)"), /t is the time variable/);

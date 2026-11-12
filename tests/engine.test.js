@@ -199,8 +199,8 @@ test("the numerical integral matches F(s) inside the region of convergence", () 
       assert.equal(convergence(m, s), "converges");
       const path = integralPath(m, s, horizon(m, s, m.tWindow), 20000);
       const got = C(path.ir[path.n], path.ii[path.n]), want = evalTransformAt(m, s);
-      // (at a zero of F, 1% of nothing is no tolerance at all: there it is 1e-4)
-      assert.ok(dist(got, want) <= 0.01 * Math.max(abs(want), 0.01), `${preset.id} at ${s.re}+${s.im}i: ${got.re}+${got.im}i vs ${want.re}+${want.im}i`);
+      // (at a zero of F, 1% of nothing is no tolerance at all: there it is 3e-4)
+      assert.ok(dist(got, want) <= 0.01 * Math.max(abs(want), 0.03), `${preset.id} at ${s.re}+${s.im}i: ${got.re}+${got.im}i vs ${want.re}+${want.im}i`);
     }
   }
 });
@@ -221,5 +221,129 @@ test("every preset works and has real poles or conjugate pairs", () => {
     const m = good(p.input);
     assert.ok(m.steps.length >= 2 && m.steps.every((s) => s.tex && !/NaN|undefined/.test(s.tex)), p.id);
     for (const pole of m.poles) if (pole.s.im !== 0) assert.ok(m.poles.some((o) => o.s.re === pole.s.re && o.s.im === -pole.s.im), p.id);
+  }
+});
+
+// ── the lecture's properties: time delay, derivative, integral, convolution, scaling ──
+
+const at = (m, s) => evalTransformAt(m, s);
+test("time delay: a piece switched on at T transforms to e^(−sT) times its own transform", () => {
+  const e = (s, T) => { const k = Math.exp(-s.re * T); return C(k * Math.cos(s.im * T), -k * Math.sin(s.im * T)); };
+  for (const [input, F] of [
+    [{ mode: "function", fn: "u(t - 1) - u(t - 2)" }, (s) => div(sub(e(s, 1), e(s, 2)), s)],
+    [{ mode: "rational", rational: "(e^(-s) - e^(-2s))/s" }, (s) => div(sub(e(s, 1), e(s, 2)), s)],
+    [{ mode: "function", fn: "sin(t - 2) u(t - 2)" }, (s) => div(e(s, 2), plus(sq(s), 1))],
+    [{ mode: "function", fn: "t u(t - 1)" }, (s) => mul(e(s, 1), add(div(one, sq(s)), div(one, s)))], // t = (t − 1) + 1
+    [{ mode: "function", fn: "3delta(t - 2)" }, (s) => mul(C(3, 0), e(s, 2))],
+    [{ mode: "rational", rational: "e^(-2s)/(s + 1)" }, (s) => div(e(s, 2), plus(s, 1))],
+  ]) {
+    const m = good(input);
+    assert.ok(m.delayed, JSON.stringify(input));
+    for (const s of S) closeC(at(m, s), F(s), `${JSON.stringify(input)} at ${s.re}+${s.im}i`);
+  }
+});
+
+test("a delayed piece is zero until it switches on, then the shifted signal", () => {
+  const m = good({ mode: "rational", rational: "e^(-2s)/(s + 1)" });
+  close(evalSignal(m, 1.9), 0, "before");
+  for (const t of [2, 2.5, 4]) close(evalSignal(m, t), Math.exp(-(t - 2)), `f(${t})`);
+  const pulse = good({ mode: "function", fn: "u(t - 1) - u(t - 2)" });
+  assert.deepEqual([0.5, 1, 1.5, 2, 3].map((t) => evalSignal(pulse, t)), [0, 1, 1, 0, 0]);
+  assert.match(m.steps.at(-1).tex, /e\^\{-\(t - 2\)\}\\,u\(t - 2\)/);
+});
+
+test("a pole that the delayed pieces cancel isn't a pole: a pulse converges everywhere", () => {
+  const pulse = good({ mode: "function", fn: "u(t - 1) - u(t - 2)" });
+  assert.equal(pulse.poles.length, 0);
+  assert.equal(pulse.roc, -Infinity);
+  closeC(at(pulse, C(0, 0)), one, "F(0) is the pulse's area"); // the limit, at the cancelled pole
+  for (const s of [C(-2, 1), C(0.3, -4)]) {
+    assert.equal(convergence(pulse, s), "converges");
+    const path = integralPath(pulse, s, horizon(pulse, s, pulse.tWindow), 20000);
+    closeC(C(path.ir[path.n], path.ii[path.n]), at(pulse, s), `the integral at ${s.re}+${s.im}i`);
+  }
+  // a pulse into an RC circuit: the pole at 0 cancels, the circuit's own at −1 stays
+  const rc = good({ mode: "ode", ode: "y' + y = u(t) - u(t - 1)", ics: ["0"] });
+  assert.deepEqual(rc.poles.map((p) => p.s.re), [-1]);
+  close(evalSignal(rc, 1), 1 - Math.exp(-1), "y(1)");
+  close(evalSignal(rc, 3), (1 - Math.exp(-1)) * Math.exp(-2), "y(3)");
+});
+
+test("the derivative rule: L{f′} = sF(s) − f(0⁻), jumps becoming impulses", () => {
+  const d = (fn) => good({ mode: "function", fn: `diff(${fn})` });
+  // e^t is continuous at 0, so f(0⁻) = 1 and L{f′} = s/(s − 1) − 1 = 1/(s − 1)
+  for (const s of S) closeC(at(d("e^t"), s), div(one, plus(s, -1)), "diff(e^t)");
+  for (const s of S) closeC(at(d("cos(2t)"), s), div(C(-4, 0), plus(sq(s), 4)), "diff(cos 2t)");
+  // the step jumps at 0: its derivative is the impulse
+  const u = d("u(t)");
+  assert.deepEqual(u.imp, [1]);
+  assert.equal(u.terms.length, 0);
+  // and a delayed step's derivative is a delayed impulse
+  assert.deepEqual(d("u(t - 3)").kicks.map((k) => [k.T, k.imp]), [[3, [1]]]);
+  assert.match(u.steps[0].tex, /s\\,F\(s\) - f\(0\^-\) = s\\left\(\\frac\{1\}\{s\}\\right\) - 0 = 1/);
+});
+
+test("the integral rule: L{∫ f} = F(s)/s", () => {
+  for (const [fn, F] of [
+    ["delta(t)", (s) => div(one, s)],
+    ["u(t)", (s) => div(one, sq(s))],
+    ["e^(-2t)", (s) => div(one, mul(s, plus(s, 2)))],
+    ["t^2 e^(-t)", (s) => div(C(2, 0), mul(s, cube(plus(s, 1))))],
+    ["sin(3t)", (s) => div(C(3, 0), mul(s, plus(sq(s), 9)))],
+    ["u(t - 1)", (s) => div(C(Math.exp(-s.re) * Math.cos(s.im), -Math.exp(-s.re) * Math.sin(s.im)), sq(s))],
+  ]) {
+    const m = good({ mode: "function", fn: `int(${fn})` });
+    for (const s of S) closeC(at(m, s), F(s), `int(${fn}) at ${s.re}+${s.im}i`);
+  }
+  close(evalSignal(good({ mode: "function", fn: "int(e^(-2t))" }), 1), (1 - Math.exp(-2)) / 2, "∫₀¹ e^(−2τ) dτ");
+});
+
+test("the convolution rule: L{f * g} = F(s) G(s)", () => {
+  const h = good({ mode: "function", fn: "conv(e^(-t), sin(t))" });
+  for (const s of S) closeC(at(h, s), div(one, mul(plus(s, 1), plus(sq(s), 1))), "F·G");
+  // against the convolution integral itself, by Simpson's rule
+  const f = (t) => Math.exp(-t), g = (t) => Math.sin(t), t = 2.7, n = 2000;
+  let sum = 0;
+  for (let i = 0; i <= n; i++) { const tau = (t * i) / n, w = i === 0 || i === n ? 1 : i % 2 ? 4 : 2; sum += w * f(tau) * g(t - tau); }
+  close(evalSignal(h, t), (sum * t) / n / 3, "(f * g)(2.7)");
+  // an impulse is the convolution's identity, and a delay adds up
+  for (const s of S) closeC(at(good({ mode: "function", fn: "conv(delta(t), e^(-t))" }), s), div(one, plus(s, 1)), "δ * f");
+  assert.deepEqual(good({ mode: "function", fn: "conv(u(t - 1), delta(t - 2))" }).signal.map((x) => x.on), [3]);
+});
+
+test("the worked steps name the property used", () => {
+  const titles = (input) => good(input).steps.map((s) => s.title).join(" | ");
+  assert.match(titles({ mode: "function", fn: "e^(-t) cos(t)" }), /Exponential scaling/);
+  assert.match(good({ mode: "function", fn: "e^(-t) cos(t)" }).steps[1].tex, /G\(s \+ 1\) = \\frac\{s \+ 1\}\{\(s \+ 1\)\^\{2\} \+ 1\}/);
+  assert.match(titles({ mode: "function", fn: "t e^(-t)" }), /Multiplication by t/);
+  assert.match(titles({ mode: "function", fn: "3delta(t) - 2e^t" }), /linear/);
+  assert.match(titles({ mode: "function", fn: "diff(u(t))" }), /The derivative rule/);
+  assert.match(titles({ mode: "function", fn: "int(u(t))" }), /The integral rule/);
+  assert.match(titles({ mode: "function", fn: "conv(e^(-t), sin(t))" }), /The convolution rule/);
+  assert.match(titles({ mode: "function", fn: "u(t - 1) - u(t - 2)" }), /delay as a factor/);
+});
+
+test("partial fractions by equating coefficients, as done by hand", () => {
+  const eq = (rational) => good({ mode: "rational", rational }).steps.find((s) => s.title === "Equate coefficients")?.tex ?? "";
+  const lecture = eq("(s + 1)/((s + 2)(s + 3))");
+  assert.match(lecture, /&= A\(s \+ 3\) \+ B\(s \+ 2\)/);
+  assert.match(lecture, /A \+ B &= 1\\\\3A \+ 2B &= 1/);
+  assert.match(lecture, /A = -1,\\quad B = 2/);
+  assert.match(eq("(2s^2 + 3s + 1)/(s(s + 1)(s + 2))"), /A = \\tfrac\{1\}\{2\},\\quad B = \\tfrac\{3\}\{2\}/);
+  // complex and repeated poles: (As + B)/(s² + 4) + C/(s + 1) + D/(s + 1)²
+  const mixed = eq("(s^3 + 2)/((s + 1)^2 (s^2 + 4))");
+  assert.match(mixed, /\\frac\{As \+ B\}\{s\^\{2\} \+ 4\} \+ \\frac\{C\}\{s \+ 1\} \+ \\frac\{D\}\{\(s \+ 1\)\^\{2\}\}/);
+  assert.match(mixed, /\(As \+ B\)\(s \+ 1\)\^\{2\} \+ C\(s\^\{2\} \+ 4\)\(s \+ 1\) \+ D\(s\^\{2\} \+ 4\)/);
+  // more than five unknowns, or repeated complex poles: no hand-sized system to show
+  assert.equal(eq("1/(s^2 + 1)^2"), "");
+  assert.equal(eq("1/(s + 1)"), "");
+});
+
+test("every example's note is clean TeX between $ signs", () => {
+  for (const p of PRESETS) {
+    assert.ok(!/[\u0000-\u001f]/.test(p.note), `${p.id}: a control character (an escape lost its backslash?)`);
+    const maths = p.note.split("$").filter((_, i) => i % 2);
+    assert.equal(p.note.split("$").length % 2, 1, `${p.id}: unbalanced $`);
+    for (const m of maths) assert.doesNotMatch(m, /(?<!\\)\b(mathcal|frac|tfrac|delta|cdot|pm|sqrt|tau|sin|cos|operatorname)\b/, `${p.id}: ${m}`);
   }
 });

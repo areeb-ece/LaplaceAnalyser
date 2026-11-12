@@ -80,7 +80,7 @@ export function rationalFromAst(n) {
         if (k < 0) throw new InputError("The square root of a negative number isn't real.");
         return number(Math.sqrt(k));
       }
-      if (n.fn === "exp" && k === null) throw new InputError("A delay factor such as exp(-2s) isn't supported yet: F(s) has to be a ratio of polynomials in s.");
+      if (n.fn === "exp" && k === null) throw new InputError("A delay factor such as exp(-2s) can only multiply the rest of F(s), not sit inside a function or a power.");
       if (k !== null && n.fn !== "u") return number({ exp: Math.exp, sin: Math.sin, cos: Math.cos, sinh: Math.sinh, cosh: Math.cosh }[n.fn](k));
       throw new InputError(`F(s) has to be a ratio of polynomials in s, so ${n.fn}(…) of s can't be part of it.`);
     }
@@ -88,7 +88,7 @@ export function rationalFromAst(n) {
       if (n.op === "^") {
         const e = constRat(rationalFromAst(n.b)), base = rationalFromAst(n.a), b = constRat(base);
         if (e === null) {
-          if (b !== null) throw new InputError("A delay factor such as e^(-2s) isn't supported yet: F(s) has to be a ratio of polynomials in s.");
+          if (b !== null) throw new InputError("A delay factor such as e^(-2s) can only multiply the rest of F(s), not sit inside a function or a power.");
           throw new InputError("A power has to be a whole number here, as in (s + 1)^2.");
         }
         if (b !== null) {
@@ -114,3 +114,72 @@ export function rationalFromAst(n) {
 }
 /** The numerator multiplied out, as a real polynomial (ascending). */
 export const numerator = (r) => rscale(expand(r.num), r.k);
+
+// ── transforms with delay factors: Σ e^(−sT) R_T(s) ──
+// A list of pieces [{ T, r }], T ≥ 0, each r a rational function as above. e^(−sT) is the
+// transform's form of a delay by T (the time-delay rule); e^(+sT) would be an advance,
+// which a signal that starts at t = 0 can't have.
+const piece = (T, r) => ({ T, r });
+const sameT = (a, b) => Math.abs(a - b) <= 1e-12 * (1 + Math.abs(a));
+function addPieces(a, b) {
+  const out = a.map((p) => piece(p.T, p.r));
+  for (const p of b) {
+    const i = out.findIndex((o) => sameT(o.T, p.T));
+    if (i >= 0) out[i] = piece(out[i].T, addRat(out[i].r, p.r)); else out.push(p);
+  }
+  return out.filter((p) => p.r.k !== 0);
+}
+function mulPieces(a, b) {
+  let out = [];
+  for (const p of a) for (const q of b) out = addPieces(out, [piece(p.T + q.T, mulRat(p.r, q.r))]);
+  return out;
+}
+// The delay a power of e (or of another positive number) stands for: b^(c·s + d) is
+// b^d e^(c ln b · s), a delay of −c ln b when that is positive. null when it isn't one.
+function delayOf(base, power) {
+  const b = constRat(rationalFromAst(base));
+  if (b === null || b <= 0) return null;
+  const p = rationalFromAst(power);
+  if (p.den.length || constRat(p) !== null) return null;
+  const poly = numerator(p);
+  if (poly.length !== 2) throw new InputError("The power of e can only be a number times s (plus a number), as in e^(-2s). Anything else isn't a delay.");
+  const T = -poly[1] * Math.log(b);
+  if (T < -1e-12) throw new InputError(`e^(+${+(-T).toPrecision(6)}s) would move the signal earlier, before t = 0, which a signal that starts at t = 0 can't do. A delay is e^(-${+(-T).toPrecision(6)}s), with a minus sign.`);
+  return [piece(Math.max(0, T), number(Math.pow(b, poly[0])))];
+}
+const hasS = (n) => n.t === "var" ? n.name === "s" : n.t === "neg" ? hasS(n.a) : n.t === "call" ? hasS(n.arg) : n.t === "bin" ? hasS(n.a) || hasS(n.b) : false;
+
+/** A syntax tree as Σ e^(−sT) R_T(s): pieces [{ T, r }]. Without delay factors, one piece at T = 0. */
+export function delayedFromAst(n) {
+  if (n.t === "neg") return delayedFromAst(n.a).map((p) => piece(p.T, negRat(p.r)));
+  if (n.t === "call" && n.fn === "exp" && hasS(n.arg)) {
+    const d = delayOf({ t: "var", name: "e" }, n.arg);
+    if (d) return d;
+  }
+  if (n.t === "bin" && n.op === "^" && hasS(n.b)) {
+    const d = delayOf(n.a, n.b);
+    if (d) return d;
+  }
+  if (n.t === "bin" && n.op !== "^") {
+    const a = delayedFromAst(n.a), b = delayedFromAst(n.b);
+    if (n.op === "+") return addPieces(a, b);
+    if (n.op === "-") return addPieces(a, b.map((p) => piece(p.T, negRat(p.r))));
+    if (n.op === "*") return mulPieces(a, b);
+    if (b.length !== 1 || b[0].T !== 0) {
+      throw new InputError(b.length === 1
+        ? "Dividing by a delay factor, e^(-Ts), would be an advance: the signal would have to start before t = 0. Multiply by the delay factor instead."
+        : "Dividing by a sum that contains a delay factor doesn't give a signal this tool can invert. Delay factors can only multiply.");
+    }
+    return a.map((p) => piece(p.T, mulRat(p.r, invRat(b[0].r))));
+  }
+  if (n.t === "bin" && n.op === "^") {
+    const base = delayedFromAst(n.a);
+    if (base.length === 1 && base[0].T === 0) return [piece(0, rationalFromAst(n))];
+    const e = constRat(rationalFromAst(n.b));
+    if (e === null || !Number.isInteger(e) || e < 0) throw new InputError("A delay factor can only be raised to a whole, positive power.");
+    let r = [piece(0, number(1))];
+    for (let i = 0; i < e; i++) r = mulPieces(r, base);
+    return r;
+  }
+  return [piece(0, rationalFromAst(n))];
+}

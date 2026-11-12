@@ -6,7 +6,7 @@
 // Σ d_k s^k, which is the transform of the impulses Σ d_k δ^(k)(t) at t = 0.
 import { C, add, sub, mul, div, scale, abs, conj, dist } from "./complex.js";
 import { padd, pmul, pscale, peval, fromRoots, taylor, deflate, trim } from "./poly.js";
-import { term, makeReal, isImpulse } from "./expoly.js";
+import { term, makeReal, isImpulse, startOf } from "./expoly.js";
 
 const fact = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
 const samePole = (a, b) => dist(a, b) <= 1e-9 * (1 + abs(a));
@@ -134,6 +134,39 @@ export function pairUp(poles) {
     if (twin) twin.s = conj(p.s);
   }
   return poles.sort((a, b) => b.s.re - a.s.re || Math.abs(a.s.im) - Math.abs(b.s.im) || b.s.im - a.s.im);
+}
+
+/**
+ * A signal split by where its pieces start: [{ T, terms }] in order of T, each piece
+ * written in τ = t − T (so it transforms on its own, and the whole is Σ e^(−sT) F_T(s)).
+ * Plain terms and pieces switched on at 0 both start at 0.
+ */
+export function groupsOf(signal) {
+  const out = [];
+  for (const x of signal) {
+    const T = startOf(x);
+    let g = out.find((o) => Math.abs(o.T - T) <= 1e-12 * (1 + T));
+    if (!g) out.push((g = { T, terms: [] }));
+    const local = isImpulse(x) ? { c: x.c, n: 0, lam: x.lam, d: x.d } : { c: x.c, n: x.n, lam: x.lam };
+    g.terms.push(local);
+  }
+  return out.sort((a, b) => a.T - b.T);
+}
+
+/** A transform back to time: { imp (complex, ascending), terms } of the piece it is. */
+export function inverseOf(F) {
+  const poles = partialFractions(F);
+  return { imp: polyPart(F), terms: inverseTerms(poles), poles };
+}
+
+/** Two transforms multiplied (convolution): numerators multiplied, poles merged. */
+export function mulTransform(A, B) {
+  const poles = A.poles.map((p) => ({ s: p.s, mult: p.mult }));
+  for (const p of B.poles) {
+    const hit = poles.find((o) => samePole(o.s, p.s));
+    if (hit) hit.mult += p.mult; else poles.push({ s: p.s, mult: p.mult });
+  }
+  return { num: trim(pmul(A.num, B.num)), lead: A.lead * B.lead, poles: pairUp(poles) };
 }
 
 export { samePole };

@@ -219,8 +219,8 @@ try {
     assert.equal(await page.locator("#dock").getAttribute("data-stale"), null);
     assert.equal(await page.locator(".ics .mf").count(), 3, "a third-order equation asks for three starting values");
     await page.click('[data-mode="rational"]');
-    await typeExpr(page, "e^(-2s) /s");
-    assert.match(await page.locator("#inError").innerText(), /delay factor/);
+    await typeExpr(page, "1/(1 - e^(-s))");
+    assert.match(await page.locator("#inError").innerText(), /Delay factors can only multiply/);
 
     // ── the maths box: typeset while it is typed ──
     const box = '.view[data-view="input"] .form > .sd-field .mf';
@@ -433,6 +433,7 @@ try {
       await page.selectOption("#inExamples", id);
       await frame(page);
       assert.ok(await page.isHidden("#inError"), id);
+      assert.equal(await page.locator(".katex-error").count(), 0, `${id}: every formula typesets`);
       if (["car", "coupled", "aircraft", "string", "erlang"].includes(id)) await shot(page, "example-" + id);
     }
 
@@ -446,7 +447,7 @@ try {
     assert.ok((await tex('.view[data-view="time"] .mlayer .ml')).some((t) => /\\delta\(t\)/.test(t)), "the time plot labels the impulse");
     assert.match(await page.locator('.view[data-view="integral"] .key').innerText(), /First, at t = 0/, "the integral's key names the impulses' jump");
     assert.match(await page.locator('.view[data-view="integral"] .key').innerText(), /Converges/);
-    assert.match(await page.locator('.view[data-view="integrand"] .key').innerText(), /Not drawn: at t = 0/);
+    assert.match(await page.locator('.view[data-view="integrand"] .key').innerText(), /Not drawn, the impulses/);
     await shot(page, "example-highpass");
     await page.click('[data-layout="ode"]');
     await page.selectOption("#inExamples", "hammer");
@@ -458,8 +459,25 @@ try {
     await page.selectOption("#inExamples", "impulse");
     await frame(page);
     assert.ok((await tex('.view[data-view="decomp"] .mlayer .ml')).some((t) => /No poles/.test(t)));
-    assert.match(await page.locator('.view[data-view="decomp"] .key').innerText(), /Plus, at t = 0 only/);
+    assert.match(await page.locator('.view[data-view="decomp"] .key').innerText(), /Plus, the impulses/);
     await shot(page, "example-impulse");
+    // delays: a jump where the step switches on, e^(−sT) in the steps, no zeros on the map
+    await page.selectOption("#inExamples", "deadtime");
+    await frame(page);
+    assert.ok((await tex(".steps .math")).some((t) => /\\left\[1 - e\^\{-\(t - 2\)\}\\right\]u\(t - 2\)/.test(t)), "the solution is switched on at t = 2");
+    assert.match(await page.locator('.view[data-view="pz"] .key').innerText(), /Zeros not drawn/);
+    await shot(page, "example-deadtime");
+    await page.selectOption("#inExamples", "rectpulse");
+    await frame(page);
+    assert.equal(await page.locator('.view[data-view="decomp"] .key').innerText().then((t) => /Their sum/.test(t)), true, "each piece's pole still turns while it is on");
+    await shot(page, "example-rectpulse");
+    // the lecture's rules, named in the steps
+    for (const [id, title] of [["pfe", "Equate coefficients"], ["derivstep", "The derivative rule"], ["conv", "The convolution rule"], ["expscale", "Exponential scaling"]]) {
+      await page.selectOption("#inExamples", id);
+      await frame(page);
+      assert.ok((await page.locator(".steps h3").allInnerTexts()).some((t) => t.startsWith(title)), `${id}: ${title}`);
+    }
+    await shot(page, "example-pfe");
     // typed with the box's δ key
     await page.click('[data-mode="function"]');
     await typeInto(page, "#inExpr", "2");

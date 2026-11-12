@@ -2,13 +2,14 @@
 // f(t) e^(-st) Δt, tip to tail. Where the integral converges the arrows spiral in on
 // F(s); where it doesn't, they wander off, even though the closed form for F(s) still
 // has a value there (its analytic continuation). Impulses at t = 0 come first, as one
-// arrow from the origin: all of their part of the integral arrives at once.
+// arrow from the origin: all of their part of the integral arrives at once. A later
+// impulse is one long arrow in the chain, at its time.
 import { h } from "../ui.js";
 import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
 import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, fitWindow, drawPlane, arrow, trace } from "../plot2d.js";
-import { evalTransformAt, hasImpulses } from "../lib/analyse.js";
+import { evalTransformAt, impulseAt } from "../lib/analyse.js";
 import { texComplex, impTex } from "../lib/tex.js";
 import { probePath, indexAt } from "../probe.js";
 
@@ -31,7 +32,7 @@ export function paintIntegral(g, state, o, cache) {
   const f = planeFrame(w, hgt, cache.win), X = (k) => f.x(path.ir[k]), Y = (k) => f.y(path.ii[k]);
   drawPlane(ctx, f, pal);
   trace(ctx, i, path.n, X, Y, pal.alpha("integral", 0.32), 1.25); // where it goes from here
-  if (hasImpulses(model)) arrow(ctx, f.x(0), f.y(0), X(0), Y(0), pal.alpha("integral", 0.9), 2.5, 10);
+  if (model.kicks.some((k) => k.T === 0)) arrow(ctx, f.x(0), f.y(0), X(0), Y(0), pal.alpha("integral", 0.9), 2.5, 10);
   const per = Math.max(1, Math.round(time.tMax / ARROWS / path.dt));
   for (let a = 0; a < i; a += per) {
     const b = Math.min(i, a + per);
@@ -55,11 +56,11 @@ export function integralLegend(state) {
   const [status, word, note] = path.status === "converges" ? (off <= 0.01 ? ["ok", "Converges", `to ${model.cap}(s)`] : ["warn", "Converging slowly", "this close to the edge of the region"])
     : path.status === "boundary" ? ["warn", "Never settles", "s is on the edge of the region of convergence"]
     : ["danger", "Diverges", `the value of ${model.cap}(s) here is its analytic continuation`];
-  const kicked = hasImpulses(model);
+  const kicked = model.kicks.some((k) => k.T === 0);
   return [
     { mark: "arrow", role: "integral", tint: true, tex: `\\int_{${kicked ? "0^-" : "0"}}^{${time.t.toFixed(2)}} ${model.sig}(\\tau)\\,e^{-s\\tau}\\,d\\tau = ${texComplex({ re: path.ir[i], im: path.ii[i] }, 3)}` },
-    // what the first arrow is: the impulses' share, all at t = 0
-    ...(kicked ? [{ mark: "arrow", role: "integral", text: "First, at t = 0,", tex: `${impTex(model.imp)} \\to ${texComplex(path.kick, 3)}` }] : []),
+    // what each impulse adds, all at once at its time: the first arrow, or a jump in the chain
+    ...model.kicks.map((k) => ({ mark: "arrow", role: "integral", text: k.T ? `At t = ${+k.T.toPrecision(4)},` : "First, at t = 0,", tex: `${impTex(k.imp, k.T)} \\to ${texComplex(k.T ? impulseAt(k, state.probe) : path.kick, 3)}` })),
     { mark: "diamond", role: "value", tint: true, tex: `${model.cap}(s) = ${finite ? texComplex(F, 3) : "\\infty"}` },
     { text: word, status },
     { text: note },

@@ -9,28 +9,38 @@ import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
 import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, drawPlane, arrow, dot } from "../plot2d.js";
-import { cplx, texNum, impTex } from "../lib/tex.js";
+import { cplx, texNum, signalTex } from "../lib/tex.js";
 import { hasImpulses } from "../lib/analyse.js";
 
 const TRACE = 1.7; // how far down the trace of past values hangs, in units of the phasors' reach
 
-// One entry per pole, a conjugate straight after its partner so each pair returns to the axis.
+// One entry per pole, a conjugate straight after its partner so each pair returns to the
+// axis. With delays, every pole of every piece: a pole that cancels in F(s) as a whole
+// still turns while its pieces are on.
 function chainOf(model) {
-  const out = [];
-  for (const p of model.poles) {
+  const out = [], poles = model.delayed ? model.allPoles : model.poles;
+  for (const p of poles) {
     if (p.s.im < 0) continue;
     out.push({ ...p, role: p.s.im > 0 ? "phUp" : "phReal" });
-    const twin = p.s.im > 0 && model.poles.find((o) => o.s.re === p.s.re && o.s.im === -p.s.im);
+    const twin = p.s.im > 0 && poles.find((o) => o.s.re === p.s.re && o.s.im === -p.s.im);
     if (twin) out.push({ ...twin, role: "phDown" });
   }
   return out;
 }
-// The phasor of one pole at time t: (A₁ + A₂ t + A₃ t²/2 + …) e^(pt).
+// The phasor of one pole at time t: (A₁ + A₂ t + A₃ t²/2 + …) e^(pt), or with delays,
+// the same from each piece that has switched on, in t − T.
 function phasor(p, t) {
-  let ar = 0, ai = 0, k = 1;
-  for (let j = 0; j < p.res.length; j++) { ar += p.res[j].re * k; ai += p.res[j].im * k; k *= t / (j + 1); }
-  const m = Math.exp(p.s.re * t), c = m * Math.cos(p.s.im * t), s = m * Math.sin(p.s.im * t);
-  return [ar * c - ai * s, ar * s + ai * c];
+  const parts = p.parts ?? [{ T: 0, res: p.res }];
+  let x = 0, y = 0;
+  for (const part of parts) {
+    const tau = t - part.T;
+    if (tau < 0) continue;
+    let ar = 0, ai = 0, k = 1;
+    for (let j = 0; j < part.res.length; j++) { ar += part.res[j].re * k; ai += part.res[j].im * k; k *= tau / (j + 1); }
+    const m = Math.exp(p.s.re * tau), c = m * Math.cos(p.s.im * tau), s = m * Math.sin(p.s.im * tau);
+    x += ar * c - ai * s; y += ar * s + ai * c;
+  }
+  return [x, y];
 }
 // e^(pt) as TeX: e^{-2t}, e^{it}, e^{(-1+3i)t}.
 function expTex(p) {
@@ -119,7 +129,7 @@ export function decompLegend(state, o, cache = {}) {
   if (roles.has("phUp")) out.push({ mark: "arrow", role: "phUp", text: "Poles above the axis" }, { mark: "arrow", role: "phDown", text: "Their conjugates" });
   if (roles.has("phReal")) out.push({ mark: "arrow", role: "phReal", text: "Real poles" });
   if (b.chain.length) out.push({ mark: "line", role: "signal", text: "Their sum,", tint: true, tex: `${state.model.sig}(${texNum(state.time.t)}) = ${texNum(sumAt(b.chain, state.time.t), 4)}` });
-  if (hasImpulses(state.model)) out.push({ text: "Plus, at t = 0 only,", tex: impTex(state.model.imp) });
+  if (hasImpulses(state.model)) out.push({ text: "Plus, the impulses,", tex: signalTex(state.model.signal.filter((x) => x.d !== undefined)) });
   return out;
 }
 
