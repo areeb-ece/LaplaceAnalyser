@@ -3,7 +3,7 @@
 // (mathfield.js), every keystroke is re-read, and anything the tool can't do is said in
 // words.
 import { h, clear } from "../ui.js";
-import { m } from "../math.js";
+import { m, tex } from "../math.js";
 import { mathField } from "../mathfield.js";
 import { parseEquation } from "../lib/parse.js";
 import { odeFromAst } from "../lib/ode.js";
@@ -14,17 +14,20 @@ const KEY = {
   d1: ["y'", "First derivative", "y'"], d2: ["y''", "Second derivative", "y''"],
   frac: ["\\tfrac{a}{b}", "Fraction", "/"], pow: ["a^b", "Power", "^"], exp: ["e^{a}", "Exponential", "e^"],
   sin: ["\\sin", "Sine", "sin("], cos: ["\\cos", "Cosine", "cos("], root: ["\\sqrt{a}", "Square root", "sqrt"], pi: ["\\pi", "Pi", "pi"],
+  imp: ["\\delta", "Unit impulse", "delta("],
 };
 const MODES = [
-  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", keys: ["d1", "d2", "frac", "pow", "exp", "sin", "cos"], hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"]] },
-  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", keys: ["frac", "pow", "exp", "sin", "cos", "root", "pi"], hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"]] },
+  { id: "ode", name: "Equation", field: "ode", label: "Differential equation", keys: ["d1", "d2", "frac", "pow", "exp", "sin", "cos", "imp"], hint: ["A linear equation in ", m("y"), ". Type it like ", ["y'' + 2y' + 5y = cos(2t)"], ", or with a blow at ", m("t = 0"), " on the right, ", ["delta(t)"]] },
+  { id: "function", name: "Function", sym: "f(t)", field: "fn", label: "Function of time", keys: ["frac", "pow", "exp", "sin", "cos", "root", "pi", "imp"], hint: ["Type it like ", ["e^(-t) sin(3t)"], " or ", ["t^2 e^(-2t) + 1"], ". An impulse at ", m("t = 0"), " is ", ["delta(t)"]] },
   { id: "rational", name: "Transform", sym: "F(s)", field: "rational", label: "Transform", keys: ["frac", "pow", "root", "pi"], hint: ["A ratio of polynomials in ", m("s"), ". Type it like ", ["(s + 3)/((s + 1)(s^2 + 4))"]] },
 ];
 // How the box behaves, said once under every mode's own hint.
 const HOW = [["/"], " starts a fraction and ", ["^"], " a power; ", ["Space"], " or ", ["→"], " steps out of one."];
 const typedAs = (parts) => parts.map((part) => (Array.isArray(part) ? h("code", { text: part[0] }) : part));
 // y(0), y'(0), … as maths (the labels of the starting-value boxes) and as plain words (for errors).
-const yTex = (k) => (k <= 3 ? "y" + "'".repeat(k) : `y^{(${k})}`) + "(0)";
+// With an impulse in the equation, they are the values just before it, at 0⁻.
+const yTex = (k, before) => (k <= 3 ? "y" + "'".repeat(k) : `y^{(${k})}`) + (before ? "(0^-)" : "(0)");
+const KICKED = /delta|dirac|δ/;
 
 // How many starting values the equation needs. While it's half-typed and won't parse,
 // count the highest derivative that appears in the text.
@@ -81,8 +84,12 @@ export default {
     // the starting values: one small box each, read the same way as the big one
     function drawIcs(input) {
       order = orderOf(input.ode, order);
+      const before = KICKED.test(input.ode);
       if (boxes.length === order) {
-        boxes.forEach((box, k) => { if (box.sent !== (input.ics[k] ?? "0")) { box.sent = input.ics[k] ?? "0"; box.field.set(box.sent); } });
+        boxes.forEach((box, k) => {
+          if (box.sent !== (input.ics[k] ?? "0")) { box.sent = input.ics[k] ?? "0"; box.field.set(box.sent); }
+          tex(box.name, yTex(k, before));
+        });
         return;
       }
       clear(icsGrid);
@@ -90,7 +97,8 @@ export default {
         const box = { sent: input.ics[k] ?? "0" };
         box.field = mathField({ id: "inIc" + k, compact: true, describedBy: "inError", onChange: later, onEnter: send });
         box.field.set(box.sent);
-        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k }, m(yTex(k))), box.field.el));
+        box.name = m(yTex(k, before));
+        icsGrid.append(h("div", { class: "sd-field" }, h("label", { class: "sd-label", for: "inIc" + k }, box.name), box.field.el));
         return box;
       });
     }

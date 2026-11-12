@@ -76,7 +76,7 @@ const actions = {
     store.set("preset", id);
     if (p.tMax) store.set("time", { ...state.time, t: p.tMax, tMax: p.tMax });
     // unless the example says where, half a unit into the region of convergence
-    store.set("probe", p.probe ? { re: p.probe[0], im: p.probe[1] } : { re: Math.round((state.model.roc + 0.5) * 2) / 2, im: 1 });
+    store.set("probe", p.probe ? { re: p.probe[0], im: p.probe[1] } : { re: Number.isFinite(state.model.roc) ? Math.round((state.model.roc + 0.5) * 2) / 2 : 0.5, im: 1 });
   },
 };
 

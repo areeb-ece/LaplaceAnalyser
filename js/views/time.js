@@ -1,10 +1,12 @@
 // f(t) or y(t) against time, with the time cursor that every other view follows.
+// Impulses at t = 0 are drawn the usual way: an arrow standing on the axis, labelled
+// with its size (an impulse has no height to plot, only an area).
 import { h, icon } from "../ui.js";
 import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
-import { fitCanvas, niceStep, tick, dot } from "../plot2d.js";
-import { evalSignal } from "../lib/analyse.js";
-import { texNum } from "../lib/tex.js";
+import { fitCanvas, niceStep, tick, dot, arrow } from "../plot2d.js";
+import { evalSignal, hasImpulses } from "../lib/analyse.js";
+import { texNum, impTex } from "../lib/tex.js";
 
 const PAD = { l: 46, r: 30, t: 34, b: 28 }; // the top holds the axis name (and, on the page, the zoom buttons)
 
@@ -14,9 +16,19 @@ function samples(state, w, cache) {
   const ys = new Float64Array(n + 1);
   let lo = 0, hi = 0;
   for (let i = 0; i <= n; i++) { const v = evalSignal(model, (time.tMax * i) / n); ys[i] = v; if (v < lo) lo = v; if (v > hi) hi = v; }
+  // an impulse's arrow needs the zero line at least halfway from the edge it points to
+  const up = upward(model);
+  if (up === true) hi = Math.max(hi, -lo); else if (up === false) lo = Math.min(lo, -hi);
   if (hi - lo < 1e-12) { hi += 1; lo -= 1; }
   const pad = (hi - lo) * 0.08;
   return Object.assign(cache, { model, tMax: time.tMax, n, ys, lo: lo - pad, hi: hi + pad });
+}
+
+// Which way the impulse arrow points (by the sign of δ(t)'s size, or of the first
+// derivative's when there's no plain impulse), or null when there are no impulses.
+function upward(model) {
+  if (!hasImpulses(model)) return null;
+  return model.imp.find((d) => d !== 0) > 0;
 }
 
 /** Draw the plot. g = { ctx, w, h, pal, math }; o.cursor: whether to mark the time cursor. */
@@ -56,6 +68,12 @@ export function paintTime(g, state, o, cache) {
   for (let i = 0; i <= s.n; i++) { const x = X((time.tMax * i) / s.n), y = Y(s.ys[i]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
   ctx.stroke();
   ctx.restore();
+  const up = upward(model);
+  if (up !== null) {
+    const y0 = Y(0), room = up ? y0 - PAD.t : hgt - PAD.b - y0, tip = y0 + (up ? -1 : 1) * room * 0.82;
+    arrow(ctx, X(0), y0, X(0), tip, pal.signal, 2.5, 11);
+    math(impTex(model.imp), X(0) + 9, tip + (up ? 6 : -6), { color: pal.signal, align: "left", valign: up ? "top" : "bottom" });
+  }
   if (!o.cursor) return;
   const v = evalSignal(model, time.t), cx = X(time.t);
   ctx.strokeStyle = pal.ink2; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
@@ -63,7 +81,9 @@ export function paintTime(g, state, o, cache) {
   ctx.setLineDash([]);
   dot(ctx, cx, Y(v), pal.signal, pal);
   const right = cx < w - 130;
-  math(`${model.sig}(${texNum(time.t)}) = ${texNum(v)}`, cx + (right ? 10 : -10), Math.max(PAD.t + 10, Math.min(hgt - PAD.b - 10, Y(v) - 14)), { color: pal.ink, align: right ? "left" : "right" });
+  // at t = 0 itself an impulse has no value: what is shown is the value just after it
+  const at = time.t === 0 && up !== null ? "0^+" : texNum(time.t);
+  math(`${model.sig}(${at}) = ${texNum(v)}`, cx + (right ? 10 : -10), Math.max(PAD.t + 10, Math.min(hgt - PAD.b - 10, Y(v) - 14)), { color: pal.ink, align: right ? "left" : "right" });
 }
 
 export default {

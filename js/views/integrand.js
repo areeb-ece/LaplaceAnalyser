@@ -5,7 +5,8 @@ import { palette } from "../palette.js";
 import { mathLayer } from "../math.js";
 import { legendDom } from "../legend.js";
 import { fitCanvas, planeFrame, fitWindow, drawPlane, arrow, dot, trace } from "../plot2d.js";
-import { texComplex } from "../lib/tex.js";
+import { texComplex, impTex } from "../lib/tex.js";
+import { hasImpulses } from "../lib/analyse.js";
 import { probePath, indexAt } from "../probe.js";
 
 /** Draw the curve. With o.cursor it is bright up to the time cursor, where its value is marked. */
@@ -27,7 +28,13 @@ export function paintIntegrand(g, state, o, cache) {
 /** What the curve is and, with the cursor, its value there. */
 export function integrandLegend(state, o) {
   const path = probePath(state), i = indexAt(path, state.time.t), name = `${state.model.sig}(t)\\,e^{-st}`;
-  return [{ mark: "line", role: "integrand", tint: true, tex: o.cursor ? `${name} = ${texComplex({ re: path.zr[i], im: path.zi[i] }, 3)}` : name }];
+  const out = [{ mark: "line", role: "integrand", tint: true, tex: o.cursor ? `${name} = ${texComplex({ re: path.zr[i], im: path.zi[i] }, 3)}` : name }];
+  // an impulse has no point to plot: say it is there, and what it is
+  if (hasImpulses(state.model)) {
+    const imp = impTex(state.model.imp), alone = state.model.imp.filter((d) => d !== 0).length === 1;
+    out.push({ text: "Not drawn: at t = 0,", tex: alone ? `${imp}\\,e^{-st}` : `\\left(${imp}\\right) e^{-st}` });
+  }
+  return out;
 }
 
 export default {

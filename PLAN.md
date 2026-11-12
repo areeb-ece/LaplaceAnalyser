@@ -106,8 +106,8 @@ work to match the family).
 ### D4. Maths scope edges
 
 - Coefficients are numbers. No symbolic parameters such as `a` or `ω`.
-- Mode C accepts strictly proper rational functions only. An improper $F(s)$ means
-  $f(t)$ contains impulses; it is rejected with a message saying so.
+- Mode C accepted strictly proper rational functions only at first. Impulses were
+  added later (section 17), and an improper $F(s)$ is now divided out into them.
 - Mode C assumes a causal signal, so the region of convergence is right of the
   rightmost pole.
 - Denominator degree is capped at 12 (ODE order up to 6, comfortably above the required 4).
@@ -362,7 +362,8 @@ Added at areeb's request, on the same architecture:
 - **All maths outside the input boxes is typeset with KaTeX**: plot labels, keys and
   values, the time and probe readouts, the syntax sheet. KaTeX now loads with the page
   rather than on first use. What to type is still shown as typed.
-- **Sixty-one examples in eleven fields**, each with a note on what it models.
+- **Sixty-one examples in eleven fields**, each with a note on what it models (sixty-seven
+  since impulses were added).
 - **Not offered: SVG.** The other tools save SVG, but the surface is a WebGL raster, so
   a vector file could only hold part of the picture.
 
@@ -390,3 +391,33 @@ Added at areeb's request: typing that works like Desmos's.
   be ambiguous; pasted text that is (`e^-2t`, `1/2t`) stays as plain characters and is
   asked about as before. An empty box inside the maths is refused in words.
 
+## 17. Impulses
+
+Added at areeb's request: Dirac delta functions in every mode.
+
+- **One idea carries it: impulses are the polynomial part of $F(s)$**, because
+  $\mathcal{L}\{\delta^{(k)}(t)\} = s^k$. A transform keeps its form
+  `{ num, lead, poles }`, now allowed to be improper; the polynomial part is found by long
+  division and becomes `model.imp`, the impulses' sizes. Everything that was proper before
+  is unchanged.
+- **Typed as `delta(t)`**, with primes for derivatives (`delta'(t)`), and `δ` or `dirac`
+  as other spellings. The maths box turns `delta` into $\delta$ as it turns `pi` into
+  $\pi$, and has a key for it in the two modes that take a function of $t$.
+- **Signals carry impulse terms** `{ c, d }` beside their $c\,t^n e^{\lambda t}$ terms. A
+  product with an ordinary term sifts it (Leibniz's rule for $g\,\delta^{(k)}$); a
+  product of two impulses, a power of one, an impulse inside a function, and division by
+  one are refused, because none has a meaning. $\delta(at) = \delta(t)/\lvert a\rvert$;
+  a delayed impulse is refused like a delayed step.
+- **Starting values are at $t = 0^-$** when the equation has an impulse on the right, as
+  the one-sided transform assumes. The worked steps and the boxes' labels say $y(0^-)$.
+- **No poles is a real case now.** Impulses alone converge for every $s$: the region of
+  convergence starts at $-\infty$, the pole-zero map is hatched everywhere, and the
+  decomposition says there is nothing to turn.
+- **Each view shows impulses in the way that is true for it.** The time plot draws the
+  textbook arrow at $t = 0$ with its size; the integral adds $\sum d_k s^k$ as one first
+  arrow (exact, by definition, not numerical); the integrand and the decomposition,
+  which have no point or pole to draw, name the impulses in their keys.
+- **Limits:** derivatives up to the 4th, and a numerator of degree at most 12.
+- **Six examples** that are impulses in their fields: the unit impulse and the doublet,
+  an RC high-pass's impulse response, a lead compensator, a hammer blow on a mass on a
+  spring, and a drug given as a bolus.

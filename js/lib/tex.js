@@ -72,10 +72,19 @@ const tPower = (n) => (n === 0 ? "" : n === 1 ? "t" : `t^{${n}}`);
 const kt = (k) => (mag(k) === "1" ? "" : mag(k)) + "t";
 const expo = (sigma) => (sigma === 0 ? "" : `e^{${sigma < 0 ? "-" : ""}${kt(sigma)}}`);
 
-/** A real signal (a list of terms) as a sum of t^n e^(σt) cos(ωt) and sin(ωt). */
-export function timeTex(terms) {
+// δ(t), δ'(t), δ''(t), δ⁽³⁾(t): the unit impulse and its derivatives.
+const deltaTex = (k) => `\\delta${k === 0 ? "" : k <= 2 ? "'".repeat(k) : `^{(${k})}`}(t)`;
+
+/**
+ * A real signal as a sum of impulses at t = 0, then t^n e^(σt) cos(ωt) and sin(ωt).
+ * The impulses are the terms of the list that are impulses, and imp[k], the size of
+ * δ^(k)(t), when given.
+ */
+export function timeTex(terms, imp = []) {
   const parts = [];
+  imp.forEach((d, k) => { if (d) parts.push({ k: d, body: deltaTex(k) }); });
   for (const x of terms) {
+    if (x.d !== undefined) { parts.push({ k: x.c.re, body: deltaTex(x.d) }); continue; }
     if (x.lam.im < 0) continue; // counted with its conjugate
     const head = [tPower(x.n), expo(x.lam.re)].filter(Boolean).join("\\,");
     if (x.lam.im === 0) { parts.push({ k: x.c.re, body: head }); continue; }
@@ -110,6 +119,17 @@ export const denTex = (poles) => product(factors(poles));
 export function fractionTex(numReal, lead, poles) {
   const top = polyTex(numReal.map((x) => x / lead));
   return poles.length ? `\\frac{${top}}{${denTex(poles)}}` : top;
+}
+
+/** The impulses alone, Σ imp[k] δ^(k)(t) (for labels on the plots). */
+export const impTex = (imp) => timeTex([], imp);
+
+/** A polynomial part (the impulses' transform) and then the partial fractions. */
+export function partsTex(imp, poles) {
+  const head = imp.some((d) => d) ? polyTex(imp) : "", tail = poles.length ? fractionsTex(poles) : "";
+  if (!tail || tail === "0") return head || "0";
+  if (!head) return tail;
+  return `${head} ${/^-/.test(tail) ? "- " + tail.slice(1) : "+ " + tail}`;
 }
 
 /** Partial fractions, with each conjugate pair of simple terms combined into a real one. */
@@ -148,8 +168,8 @@ export function odeTex(coefs, forcing) {
   for (let k = coefs.length - 1; k >= 0; k--) parts.push({ k: coefs[k], body: yTex(k) });
   return `${sum(parts)} = ${timeTex(forcing)}`;
 }
-/** y(0) = …, y'(0) = …. */
-export const icsTex = (ics) => ics.map((v, k) => `${yTex(k, "(0)")} = ${num(v)}`).join(",\\quad ");
+/** y(0) = …, y'(0) = …; at 0⁻ (just before an impulse) when before is set. */
+export const icsTex = (ics, before = false) => ics.map((v, k) => `${yTex(k, before ? "(0^-)" : "(0)")} = ${num(v)}`).join(",\\quad ");
 
 /**
  * The equation after transforming both sides, with the initial values written in:
@@ -186,6 +206,7 @@ export function astTex(n) {
       if (n.fn === "sqrt") return `\\sqrt{${astTex(n.arg)}}`;
       if (n.fn === "exp") return `e^{${astTex(n.arg)}}`;
       if (n.fn === "u") return `u(${astTex(n.arg)})`;
+      if (n.fn === "delta") return `\\delta${n.order <= 2 ? "'".repeat(n.order) : `^{(${n.order})}`}\\left(${astTex(n.arg)}\\right)`;
       return `\\${n.fn}\\left(${astTex(n.arg)}\\right)`;
     case "bin": {
       const { a, b } = n;

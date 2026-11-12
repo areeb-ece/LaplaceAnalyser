@@ -2,7 +2,8 @@
 // each name is allowed to mean is decided later by whoever reads the tree.
 //
 // Nodes: { t: "num", v } · { t: "var", name } (t, s, e, pi) · { t: "y", order } ·
-//        { t: "call", fn, arg } · { t: "neg", a } · { t: "bin", op, a, b, implicit }
+//        { t: "call", fn, arg, order } · { t: "neg", a } · { t: "bin", op, a, b, implicit }
+// (order is set on a call to delta: how many primes, delta'(t) being the first derivative.)
 // A node read from inside brackets carries paren: true (used when printing it back).
 
 /** A problem with what was typed, worded for the person who typed it. */
@@ -10,13 +11,13 @@ export class InputError extends Error {
   constructor(message) { super(message); this.name = "InputError"; }
 }
 
-export const WORDS = ["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "pi", "t", "s", "y", "u", "e"];
-export const FUNCS = new Set(["sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
+export const WORDS = ["delta", "dirac", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "pi", "t", "s", "y", "u", "e"];
+export const FUNCS = new Set(["delta", "dirac", "sinh", "cosh", "sqrt", "step", "sin", "cos", "exp", "u"]);
 const SUPER = { "²": "^2", "³": "^3", "⁴": "^4" };
 
 function clean(src) {
   let text = String(src).toLowerCase()
-    .replace(/[−–—]/g, "-").replace(/[·×∙]/g, "*").replace(/÷/g, "/").replace(/π/g, "pi")
+    .replace(/[−–—]/g, "-").replace(/[·×∙]/g, "*").replace(/÷/g, "/").replace(/π/g, "pi").replace(/δ/g, "delta")
     .replace(/[′’‘`]/g, "'").replace(/″/g, "''").replace(/[²³⁴]/g, (c) => SUPER[c]);
   // Leibniz derivatives: dy/dt, d^2y/dt^2, d2y/dt2.
   text = text.replace(/d\s*(?:\^?\s*(\d+))?\s*y\s*\/\s*d\s*t\s*(?:\^?\s*(\d+))?/g, (m, a = "1", b = "1") => {
@@ -40,7 +41,7 @@ function tokenize(src) {
       const word = WORDS.find((w) => text.startsWith(w, i));
       if (!word) {
         const run = /^[a-z]+/.exec(text.slice(i))[0];
-        throw new InputError(`I don't know what "${run}" means here. The names I know are t, s, y, e, pi, sin, cos, exp, sinh, cosh, sqrt and u (the unit step).`);
+        throw new InputError(`I don't know what "${run}" means here. The names I know are t, s, y, e, pi, sin, cos, exp, sinh, cosh, sqrt, u (the unit step) and delta (the unit impulse).`);
       }
       out.push({ type: "name", v: word, text: word, space });
       i += word.length;
@@ -137,19 +138,24 @@ class Parser {
         return { t: "y", order };
       }
       if (FUNCS.has(tok.v)) {
+        // delta'(t), delta''(t): derivatives of the impulse
+        const impulse = tok.v === "delta" || tok.v === "dirac";
+        let order = 0;
+        while (impulse && this.is("'")) { this.next(); order++; }
         if (this.is("^")) throw new InputError(`Write the power after the brackets: ${tok.v}(t)^2, not ${tok.v}^2(t).`);
-        if (!this.is("(")) throw new InputError(`Put what ${tok.v} applies to in brackets, like ${tok.v}(${tok.v === "u" || tok.v === "step" ? "t" : "2t"}).`);
+        if (!this.is("(")) throw new InputError(`Put what ${tok.v} applies to in brackets, like ${tok.v}(${tok.v === "u" || tok.v === "step" || impulse ? "t" : "2t"}).`);
         this.next();
         if (this.is(")")) throw new InputError(`${tok.v}() needs something inside its brackets.`);
         const arg = this.expr();
         if (!this.is(")")) throw new InputError(`The bracket after ${tok.v} is never closed.`);
         this.next();
+        if (impulse) return { t: "call", fn: "delta", arg, order };
         return { t: "call", fn: tok.v === "step" ? "u" : tok.v, arg };
       }
       return { t: "var", name: tok.v };
     }
     if (tok.type === ")") throw new InputError("There's a closing bracket with no opening one.");
-    if (tok.type === "'") throw new InputError("A prime (') can only follow y, as in y' or y''.");
+    if (tok.type === "'") throw new InputError("A prime (') can only follow y or delta, as in y'' or delta'(t).");
     if (tok.type === "=") throw new InputError("There's an = sign where I expected a value.");
     throw new InputError(`"${tok.text}" is in a place where I expected a number, a name or a bracket.`);
   }
@@ -159,7 +165,7 @@ function finish(p, what) {
   const tok = p.peek();
   if (!tok) return;
   if (tok.type === ")") throw new InputError("There's a closing bracket with no opening one.");
-  if (tok.type === "'") throw new InputError("A prime (') can only follow y, as in y' or y''.");
+  if (tok.type === "'") throw new InputError("A prime (') can only follow y or delta, as in y'' or delta'(t).");
   if (tok.type === "=") throw new InputError(what === "equation" ? "There's more than one = sign." : "This box takes an expression, not an equation: leave out the = sign.");
   throw new InputError(`I didn't expect "${tok.text}" there.`);
 }

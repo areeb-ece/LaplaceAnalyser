@@ -41,11 +41,18 @@ const PAIRS = [
   ["cos(2t + pi/3)", (s) => div(sub(mul(s, C(0.5, 0)), C(Math.sqrt(3), 0)), plus(sq(s), 4))],
   ["exp(-t)*(1 - t)^2", (s) => add(sub(div(one, plus(s, 1)), div(C(2, 0), sq(plus(s, 1)))), div(C(2, 0), cube(plus(s, 1))))],
   ["2^t", (s) => div(one, plus(s, -Math.log(2)))],
+  // impulses at t = 0: L{δ^(k)} = s^k, and a product with a function sifts it
+  ["delta(t)", () => one],
+  ["delta'(t)", (s) => s],
+  ["2delta(t) + e^(-t)", (s) => add(C(2, 0), div(one, plus(s, 1)))],
+  ["e^(3t) delta'(t)", (s) => plus(s, -3)],
+  ["t delta''(t)", (s) => mul(C(-2, 0), s)],
+  ["delta(2t) - delta''(t)", (s) => sub(C(0.5, 0), sq(s))],
 ];
 for (const [fn, F] of PAIRS) {
   test(`transform of ${fn}`, () => {
     const m = good({ mode: "function", fn });
-    for (const s of S.map((z) => add(z, C(Math.max(0, m.roc), 0)))) closeC(evalTransformAt(m, s), F(s), `F(${s.re}+${s.im}i)`);
+    for (const s of S.map((z) => add(z, C(Math.max(0, Number.isFinite(m.roc) ? m.roc : 0), 0)))) closeC(evalTransformAt(m, s), F(s), `F(${s.re}+${s.im}i)`);
   });
 }
 
@@ -96,6 +103,53 @@ for (const [ode, ics, y] of ODES) {
   });
 }
 
+// F(s) with a polynomial part → impulses at t = 0, then the rest.
+for (const [rational, imp, f] of [
+  ["s/(s+1)", [1], (t) => -Math.exp(-t)],
+  ["s^2/(s+1)", [-1, 1], (t) => Math.exp(-t)],
+  ["(s+1)/(s+10)", [1], (t) => -9 * Math.exp(-10 * t)],
+  ["(s^3+2)/((s+1)(s^2+4))", [1], (t) => -1.2 * Math.cos(2 * t) - 1.4 * Math.sin(2 * t) + 0.2 * Math.exp(-t)],
+  ["2s + 1", [1, 2], () => 0],
+  ["3", [3], () => 0],
+]) {
+  test(`inverse of ${rational}: impulses ${imp.join(", ")}`, () => {
+    const m = good({ mode: "rational", rational });
+    assert.equal(m.imp.length, imp.length);
+    m.imp.forEach((d, k) => close(d, imp[k], `δ^(${k})`));
+    for (const t of TIMES.filter((t) => t > 0)) close(evalSignal(m, t), f(t), `f(${t})`);
+  });
+}
+
+test("an impulse on the right of an equation: starting values at 0⁻, a jump at 0⁺", () => {
+  // a blow to a mass at rest: the velocity jumps to 1, the position doesn't
+  const m = good({ mode: "ode", ode: "y'' + 0.4y' + 4y = delta(t)", ics: ["0", "0"] });
+  assert.deepEqual(m.imp, []);
+  close(evalEP(m.terms, 0).re, 0, "y(0⁺)");
+  close(evalEP(derivEP(m.terms), 0).re, 1, "y'(0⁺)");
+  const ds = [m.terms, derivEP(m.terms), derivEP(derivEP(m.terms))];
+  for (const t of TIMES.filter((t) => t > 0)) close(ds[2].length && evalEP(ds[2], t).re + 0.4 * evalEP(ds[1], t).re + 4 * evalEP(ds[0], t).re, 0, `residual at ${t}`);
+  assert.match(m.steps[0].tex, /y\(0\^-\) = 0/);
+  // a bolus: the level jumps to the dose
+  close(evalEP(good({ mode: "ode", ode: "y' + 0.2y = 5delta(t)", ics: ["0"] }).terms, 0).re, 5, "y(0⁺)");
+  // the solution itself can hold an impulse
+  const d = good({ mode: "ode", ode: "y' + y = delta'(t)", ics: ["0"] });
+  assert.deepEqual(d.imp, [1]);
+  close(evalSignal(d, 1), -Math.exp(-1), "y(1)");
+});
+
+test("impulses alone have no poles, and their integral converges everywhere", () => {
+  const m = good({ mode: "function", fn: "delta(t) + 2delta'(t)" });
+  assert.equal(m.poles.length, 0);
+  assert.equal(m.roc, -Infinity);
+  for (const s of [C(-100, 3), C(0, 0), C(5, -2)]) {
+    assert.equal(convergence(m, s), "converges");
+    const path = integralPath(m, s, horizon(m, s, m.tWindow));
+    closeC(C(path.ir[path.n], path.ii[path.n]), add(one, mul(C(2, 0), s)), `the integral at ${s.re}+${s.im}i`);
+  }
+  assert.match(m.steps[0].tex, /\\delta\(t\) \+ 2\\delta'\(t\)/);
+  assert.equal(m.steps.at(-1).tex, "F(s) = 2s + 1");
+});
+
 test("the solution of an ODE satisfies the equation", () => {
   const m = good({ mode: "ode", ode: "y''' + 2y'' + 5y' + 3y = e^(-t) sin(2t) + 4", ics: ["1", "-2", "0.5"] });
   const forcing = (t) => Math.exp(-t) * Math.sin(2 * t) + 4;
@@ -141,11 +195,12 @@ test("the numerical integral matches F(s) inside the region of convergence", () 
   for (const preset of PRESETS) {
     const m = good(preset.input);
     for (const [dx, im] of [[0.3, 0.8], [1, 0], [0.6, -2.5], [2, 4]]) {
-      const s = C(m.roc + dx, im);
+      const s = C((Number.isFinite(m.roc) ? m.roc : 0) + dx, im);
       assert.equal(convergence(m, s), "converges");
       const path = integralPath(m, s, horizon(m, s, m.tWindow), 20000);
       const got = C(path.ir[path.n], path.ii[path.n]), want = evalTransformAt(m, s);
-      assert.ok(dist(got, want) <= 0.01 * abs(want), `${preset.id} at ${s.re}+${s.im}i: ${got.re}+${got.im}i vs ${want.re}+${want.im}i`);
+      // (at a zero of F, 1% of nothing is no tolerance at all: there it is 1e-4)
+      assert.ok(dist(got, want) <= 0.01 * Math.max(abs(want), 0.01), `${preset.id} at ${s.re}+${s.im}i: ${got.re}+${got.im}i vs ${want.re}+${want.im}i`);
     }
   }
 });
